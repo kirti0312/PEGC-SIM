@@ -1,0 +1,902 @@
+{
+ "A|low|1": {
+  "metrics": {
+   "ambTravelTime": 137.75,
+   "ambFinished": true,
+   "ambStops": 2,
+   "avgWait": 12.836084905660377,
+   "longestWait": 24,
+   "maxQueue": 6,
+   "throughput": 1457.142857142857,
+   "completed": 170,
+   "entered": 212,
+   "recoveryTime": null,
+   "recoveryBaseline": 4.266666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 9,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "A|low|2": {
+  "metrics": {
+   "ambTravelTime": 58.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 14.28393665158371,
+   "longestWait": 24.25,
+   "maxQueue": 6,
+   "throughput": 1491.4285714285713,
+   "completed": 174,
+   "entered": 221,
+   "recoveryTime": null,
+   "recoveryBaseline": 3.408333333333333,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 5,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "A|low|3": {
+  "metrics": {
+   "ambTravelTime": 87.75,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 14.219806763285025,
+   "longestWait": 24.25,
+   "maxQueue": 6,
+   "throughput": 1508.5714285714287,
+   "completed": 176,
+   "entered": 207,
+   "recoveryTime": null,
+   "recoveryBaseline": 3.875,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 2,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "A|medium|1": {
+  "metrics": {
+   "ambTravelTime": 109.75,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 14.494708994708995,
+   "longestWait": 24.75,
+   "maxQueue": 9,
+   "throughput": 2417.1428571428573,
+   "completed": 282,
+   "entered": 378,
+   "recoveryTime": null,
+   "recoveryBaseline": 8.775,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 22,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "A|medium|2": {
+  "metrics": {
+   "ambTravelTime": 94.25,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 15.24170918367347,
+   "longestWait": 24.5,
+   "maxQueue": 10,
+   "throughput": 2562.8571428571427,
+   "completed": 299,
+   "entered": 392,
+   "recoveryTime": null,
+   "recoveryBaseline": 9.458333333333334,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 17,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "A|medium|3": {
+  "metrics": {
+   "ambTravelTime": 101.75,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 15.660891089108912,
+   "longestWait": 26.5,
+   "maxQueue": 12,
+   "throughput": 2717.1428571428573,
+   "completed": 317,
+   "entered": 404,
+   "recoveryTime": null,
+   "recoveryBaseline": 8.275,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 16,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "A|high|1": {
+  "metrics": {
+   "ambTravelTime": 99.25,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 17.482656514382402,
+   "longestWait": 28.5,
+   "maxQueue": 15,
+   "throughput": 3771.4285714285716,
+   "completed": 440,
+   "entered": 591,
+   "recoveryTime": null,
+   "recoveryBaseline": 12.341666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 44,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "A|high|2": {
+  "metrics": {
+   "ambTravelTime": 103.25,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 16.34223300970874,
+   "longestWait": 27.5,
+   "maxQueue": 17,
+   "throughput": 4062.8571428571427,
+   "completed": 474,
+   "entered": 618,
+   "recoveryTime": null,
+   "recoveryBaseline": 13.575,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 32,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "A|high|3": {
+  "metrics": {
+   "ambTravelTime": 100,
+   "ambFinished": true,
+   "ambStops": 2,
+   "avgWait": 16.925403225806452,
+   "longestWait": 27.25,
+   "maxQueue": 14,
+   "throughput": 4277.142857142857,
+   "completed": 499,
+   "entered": 620,
+   "recoveryTime": null,
+   "recoveryBaseline": 14.591666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 27,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "B|low|1": {
+  "metrics": {
+   "ambTravelTime": 59.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.306603773584905,
+   "longestWait": 23.5,
+   "maxQueue": 6,
+   "throughput": 1448.5714285714287,
+   "completed": 169,
+   "entered": 212,
+   "recoveryTime": 17,
+   "recoveryBaseline": 4.266666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 6,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "B|low|2": {
+  "metrics": {
+   "ambTravelTime": 58.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 14.17081447963801,
+   "longestWait": 24.25,
+   "maxQueue": 6,
+   "throughput": 1491.4285714285713,
+   "completed": 174,
+   "entered": 221,
+   "recoveryTime": null,
+   "recoveryBaseline": 3.408333333333333,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 5,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "B|low|3": {
+  "metrics": {
+   "ambTravelTime": 57.5,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 14.01086956521739,
+   "longestWait": 24.25,
+   "maxQueue": 6,
+   "throughput": 1491.4285714285713,
+   "completed": 174,
+   "entered": 207,
+   "recoveryTime": null,
+   "recoveryBaseline": 3.875,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 2,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "B|medium|1": {
+  "metrics": {
+   "ambTravelTime": 86.75,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 14.015211640211641,
+   "longestWait": 25.75,
+   "maxQueue": 9,
+   "throughput": 2417.1428571428573,
+   "completed": 282,
+   "entered": 378,
+   "recoveryTime": 0,
+   "recoveryBaseline": 8.775,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 25,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "B|medium|2": {
+  "metrics": {
+   "ambTravelTime": 63.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 15.301658163265307,
+   "longestWait": 29,
+   "maxQueue": 10,
+   "throughput": 2528.5714285714284,
+   "completed": 295,
+   "entered": 392,
+   "recoveryTime": 62.75,
+   "recoveryBaseline": 9.458333333333334,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 18,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "B|medium|3": {
+  "metrics": {
+   "ambTravelTime": 88.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 14.72710396039604,
+   "longestWait": 26.5,
+   "maxQueue": 12,
+   "throughput": 2682.8571428571427,
+   "completed": 313,
+   "entered": 404,
+   "recoveryTime": 190.5,
+   "recoveryBaseline": 8.275,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 24,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "B|high|1": {
+  "metrics": {
+   "ambTravelTime": 86.25,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 17.42554991539763,
+   "longestWait": 27.25,
+   "maxQueue": 19,
+   "throughput": 3745.714285714286,
+   "completed": 437,
+   "entered": 591,
+   "recoveryTime": null,
+   "recoveryBaseline": 12.341666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 54,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "B|high|2": {
+  "metrics": {
+   "ambTravelTime": 87.5,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 16.94943365695793,
+   "longestWait": 26.75,
+   "maxQueue": 14,
+   "throughput": 4020,
+   "completed": 469,
+   "entered": 618,
+   "recoveryTime": null,
+   "recoveryBaseline": 13.575,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 40,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "B|high|3": {
+  "metrics": {
+   "ambTravelTime": 87,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 16.56935483870968,
+   "longestWait": 26,
+   "maxQueue": 14,
+   "throughput": 4251.428571428572,
+   "completed": 496,
+   "entered": 620,
+   "recoveryTime": null,
+   "recoveryBaseline": 14.591666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 33,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C|low|1": {
+  "metrics": {
+   "ambTravelTime": 59.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 12.362028301886792,
+   "longestWait": 23.25,
+   "maxQueue": 7,
+   "throughput": 1440,
+   "completed": 168,
+   "entered": 212,
+   "recoveryTime": 4.75,
+   "recoveryBaseline": 4.266666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 3,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C|low|2": {
+  "metrics": {
+   "ambTravelTime": 58.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.52262443438914,
+   "longestWait": 24.25,
+   "maxQueue": 6,
+   "throughput": 1517.142857142857,
+   "completed": 177,
+   "entered": 221,
+   "recoveryTime": 0,
+   "recoveryBaseline": 3.408333333333333,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 9,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C|low|3": {
+  "metrics": {
+   "ambTravelTime": 57.5,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 14.876811594202898,
+   "longestWait": 24.25,
+   "maxQueue": 7,
+   "throughput": 1508.5714285714287,
+   "completed": 176,
+   "entered": 207,
+   "recoveryTime": null,
+   "recoveryBaseline": 3.875,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 4,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C|medium|1": {
+  "metrics": {
+   "ambTravelTime": 71.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.42989417989418,
+   "longestWait": 24.25,
+   "maxQueue": 9,
+   "throughput": 2451.4285714285716,
+   "completed": 286,
+   "entered": 378,
+   "recoveryTime": 0,
+   "recoveryBaseline": 8.775,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 14,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C|medium|2": {
+  "metrics": {
+   "ambTravelTime": 63.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.295280612244898,
+   "longestWait": 29,
+   "maxQueue": 11,
+   "throughput": 2571.4285714285716,
+   "completed": 300,
+   "entered": 392,
+   "recoveryTime": 2.75,
+   "recoveryBaseline": 9.458333333333334,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 30,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C|medium|3": {
+  "metrics": {
+   "ambTravelTime": 73,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.070544554455445,
+   "longestWait": 33.25,
+   "maxQueue": 12,
+   "throughput": 2742.8571428571427,
+   "completed": 320,
+   "entered": 404,
+   "recoveryTime": null,
+   "recoveryBaseline": 8.275,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 32,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C|high|1": {
+  "metrics": {
+   "ambTravelTime": 71.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 18.39467005076142,
+   "longestWait": 31,
+   "maxQueue": 23,
+   "throughput": 3694.285714285714,
+   "completed": 431,
+   "entered": 591,
+   "recoveryTime": null,
+   "recoveryBaseline": 12.341666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 49,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C|high|2": {
+  "metrics": {
+   "ambTravelTime": 76.5,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 15.97653721682848,
+   "longestWait": 43.25,
+   "maxQueue": 14,
+   "throughput": 4097.142857142857,
+   "completed": 478,
+   "entered": 618,
+   "recoveryTime": null,
+   "recoveryBaseline": 13.575,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 37,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C|high|3": {
+  "metrics": {
+   "ambTravelTime": 75.75,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 15.221774193548388,
+   "longestWait": 37.5,
+   "maxQueue": 14,
+   "throughput": 4268.571428571428,
+   "completed": 498,
+   "entered": 620,
+   "recoveryTime": null,
+   "recoveryBaseline": 14.591666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 36,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C1|low|1": {
+  "metrics": {
+   "ambTravelTime": 59.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 12.362028301886792,
+   "longestWait": 23.25,
+   "maxQueue": 7,
+   "throughput": 1440,
+   "completed": 168,
+   "entered": 212,
+   "recoveryTime": 4.75,
+   "recoveryBaseline": 4.266666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 3,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C1|low|2": {
+  "metrics": {
+   "ambTravelTime": 58.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.52262443438914,
+   "longestWait": 24.25,
+   "maxQueue": 6,
+   "throughput": 1517.142857142857,
+   "completed": 177,
+   "entered": 221,
+   "recoveryTime": 0,
+   "recoveryBaseline": 3.408333333333333,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 9,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C1|low|3": {
+  "metrics": {
+   "ambTravelTime": 57.5,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 14.876811594202898,
+   "longestWait": 24.25,
+   "maxQueue": 7,
+   "throughput": 1508.5714285714287,
+   "completed": 176,
+   "entered": 207,
+   "recoveryTime": null,
+   "recoveryBaseline": 3.875,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 4,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C1|medium|1": {
+  "metrics": {
+   "ambTravelTime": 71.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.42989417989418,
+   "longestWait": 24.25,
+   "maxQueue": 9,
+   "throughput": 2451.4285714285716,
+   "completed": 286,
+   "entered": 378,
+   "recoveryTime": 0,
+   "recoveryBaseline": 8.775,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 14,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C1|medium|2": {
+  "metrics": {
+   "ambTravelTime": 63.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.295280612244898,
+   "longestWait": 29,
+   "maxQueue": 11,
+   "throughput": 2571.4285714285716,
+   "completed": 300,
+   "entered": 392,
+   "recoveryTime": 2.75,
+   "recoveryBaseline": 9.458333333333334,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 30,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C1|medium|3": {
+  "metrics": {
+   "ambTravelTime": 73,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.070544554455445,
+   "longestWait": 33.25,
+   "maxQueue": 12,
+   "throughput": 2742.8571428571427,
+   "completed": 320,
+   "entered": 404,
+   "recoveryTime": null,
+   "recoveryBaseline": 8.275,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 32,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C1|high|1": {
+  "metrics": {
+   "ambTravelTime": 71.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 18.39467005076142,
+   "longestWait": 31,
+   "maxQueue": 23,
+   "throughput": 3694.285714285714,
+   "completed": 431,
+   "entered": 591,
+   "recoveryTime": null,
+   "recoveryBaseline": 12.341666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 49,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C1|high|2": {
+  "metrics": {
+   "ambTravelTime": 76.5,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 15.97653721682848,
+   "longestWait": 43.25,
+   "maxQueue": 14,
+   "throughput": 4097.142857142857,
+   "completed": 478,
+   "entered": 618,
+   "recoveryTime": null,
+   "recoveryBaseline": 13.575,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 37,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C1|high|3": {
+  "metrics": {
+   "ambTravelTime": 75.75,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 15.221774193548388,
+   "longestWait": 37.5,
+   "maxQueue": 14,
+   "throughput": 4268.571428571428,
+   "completed": 498,
+   "entered": 620,
+   "recoveryTime": null,
+   "recoveryBaseline": 14.591666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 36,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C2|low|1": {
+  "metrics": {
+   "ambTravelTime": 59.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.306603773584905,
+   "longestWait": 23.5,
+   "maxQueue": 6,
+   "throughput": 1448.5714285714287,
+   "completed": 169,
+   "entered": 212,
+   "recoveryTime": 17,
+   "recoveryBaseline": 4.266666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 6,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C2|low|2": {
+  "metrics": {
+   "ambTravelTime": 58.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 14.17081447963801,
+   "longestWait": 24.25,
+   "maxQueue": 6,
+   "throughput": 1491.4285714285713,
+   "completed": 174,
+   "entered": 221,
+   "recoveryTime": null,
+   "recoveryBaseline": 3.408333333333333,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 5,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C2|low|3": {
+  "metrics": {
+   "ambTravelTime": 57.5,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 14.01086956521739,
+   "longestWait": 24.25,
+   "maxQueue": 6,
+   "throughput": 1491.4285714285713,
+   "completed": 174,
+   "entered": 207,
+   "recoveryTime": null,
+   "recoveryBaseline": 3.875,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 2,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C2|medium|1": {
+  "metrics": {
+   "ambTravelTime": 71.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 13.779761904761905,
+   "longestWait": 24.25,
+   "maxQueue": 9,
+   "throughput": 2408.5714285714284,
+   "completed": 281,
+   "entered": 378,
+   "recoveryTime": 6.75,
+   "recoveryBaseline": 8.775,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 18,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C2|medium|2": {
+  "metrics": {
+   "ambTravelTime": 63.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 15.301658163265307,
+   "longestWait": 29,
+   "maxQueue": 10,
+   "throughput": 2528.5714285714284,
+   "completed": 295,
+   "entered": 392,
+   "recoveryTime": 62.75,
+   "recoveryBaseline": 9.458333333333334,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 18,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C2|medium|3": {
+  "metrics": {
+   "ambTravelTime": 73,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 15.325495049504951,
+   "longestWait": 33.25,
+   "maxQueue": 12,
+   "throughput": 2717.1428571428573,
+   "completed": 317,
+   "entered": 404,
+   "recoveryTime": null,
+   "recoveryBaseline": 8.275,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 15,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C2|high|1": {
+  "metrics": {
+   "ambTravelTime": 71.75,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 16.723350253807105,
+   "longestWait": 29.5,
+   "maxQueue": 16,
+   "throughput": 3831.4285714285716,
+   "completed": 447,
+   "entered": 591,
+   "recoveryTime": null,
+   "recoveryBaseline": 12.341666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 33,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C2|high|2": {
+  "metrics": {
+   "ambTravelTime": 76.5,
+   "ambFinished": true,
+   "ambStops": 0,
+   "avgWait": 16.569983818770226,
+   "longestWait": 43.25,
+   "maxQueue": 14,
+   "throughput": 4080,
+   "completed": 476,
+   "entered": 618,
+   "recoveryTime": null,
+   "recoveryBaseline": 13.575,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 37,
+   "time": 420
+  },
+  "violations": 0
+ },
+ "C2|high|3": {
+  "metrics": {
+   "ambTravelTime": 75.75,
+   "ambFinished": true,
+   "ambStops": 1,
+   "avgWait": 16.016532258064515,
+   "longestWait": 37.5,
+   "maxQueue": 14,
+   "throughput": 4251.428571428572,
+   "completed": 496,
+   "entered": 620,
+   "recoveryTime": null,
+   "recoveryBaseline": 14.591666666666667,
+   "violations": 0,
+   "redCrossings": 0,
+   "totalQueued": 26,
+   "time": 420
+  },
+  "violations": 0
+ }
+}

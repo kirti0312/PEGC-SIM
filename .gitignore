@@ -1,0 +1,4 @@
+# dependencies and build output
+node_modules/
+dist/
+
