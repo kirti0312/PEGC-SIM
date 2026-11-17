@@ -64,10 +64,24 @@ def generate_demand(net: Network, s: Scenario, cfg: Config = CONFIG):
     return cars, amb
 
 
-def write_routes(cars, amb, out_path: str, cfg: Config = CONFIG) -> str:
+def generate_ambulances(net: Network, s: Scenario, cfg: Config = CONFIG) -> list:
+    """One VehicleSpec per ambulance in the scenario (ids amb0, amb1, ...). Unroutable ones are skipped."""
+    blocked = set(s.blocked)
+    out = []
+    for i, a in enumerate(s.ambulance_specs(cfg)):
+        route = find_route(net, a.origin, a.dest, blocked)
+        if route:
+            out.append(VehicleSpec(a.id if s.ambulances else f"amb{i}", "amb", a.start_t, a.origin, a.dest,
+                                   [x.id for x in route], cfg.amb_max_speed / cfg.car_max_speed))
+    return out
+
+
+def write_routes(cars, amb, out_path: str, cfg: Config = CONFIG, extra_ambs=()) -> str:
     items = [(v.depart, 1, v) for v in cars]
     if amb:
         items.append((amb.depart, 0, amb))  # ambulance first among simultaneous departures
+    for a in extra_ambs:
+        items.append((a.depart, 0, a))
     items.sort(key=lambda x: (x[0], x[1]))
     with open(out_path, "w", encoding="utf-8") as f:
         f.write('<routes>\n')

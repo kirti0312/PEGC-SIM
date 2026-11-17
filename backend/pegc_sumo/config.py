@@ -33,7 +33,15 @@ class Config:
     density: dict = field(default_factory=lambda: {"low": 180, "medium": 330, "high": 520})
     rate_min: int = 100
     rate_max: int = 900
-    # signals (used from step 2)
+    # metrics (same definitions as the browser engine)
+    wait_speed: float = 0.5          # m/s below which a vehicle counts as waiting
+    queue_speed: float = 1.0         # m/s below which a vehicle on a junction approach counts as queued
+    amb_stop_speed: float = 0.3      # ambulance counts a stop below this speed ...
+    amb_resume_speed: float = 1.5    # ... and can stop again only after exceeding this
+    recovery_tolerance: float = 2.0  # queued vehicles above the pre-ambulance average
+    recovery_sustain: float = 10.0   # seconds the queue must stay within tolerance
+    baseline_window: float = 30.0    # seconds before ambulance entry used for the baseline
+    # signals
     min_green: float = 7.0
     yellow: float = 3.0
     all_red: float = 2.0
@@ -47,6 +55,14 @@ CONFIG = Config()
 
 
 @dataclass
+class AmbulanceSpec:
+    id: str
+    origin: str
+    dest: str
+    start_t: float | None = None   # None means "after the warm-up"
+
+
+@dataclass
 class Scenario:
     origin: str = "W0"
     dest: str = "E1"
@@ -55,6 +71,16 @@ class Scenario:
     seed: int = 7
     blocked: tuple = ()            # segment ids such as "J00|J01"
     strategy: str = "A"
+    # Several ambulances can be described here (used from Step 10). Empty means one ambulance
+    # built from origin/dest. Step 2 measures the first ambulance only.
+    ambulances: tuple = ()
+
+    def ambulance_specs(self, cfg: "Config" = None) -> list:
+        cfg = cfg or CONFIG
+        if self.ambulances:
+            return [AmbulanceSpec(a.id, a.origin, a.dest, cfg.warmup if a.start_t is None else a.start_t)
+                    for a in self.ambulances]
+        return [AmbulanceSpec("amb0", self.origin, self.dest, cfg.warmup)]
 
 
 def entry_rate(s: Scenario, cfg: Config = CONFIG) -> int:

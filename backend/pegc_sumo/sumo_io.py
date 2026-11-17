@@ -6,7 +6,7 @@ import os
 import shutil
 
 from .config import CONFIG, Config, Scenario
-from .demand import generate_demand, write_routes
+from .demand import generate_ambulances, generate_demand, write_routes
 from .network import Network, build_network, write_sumo_network
 
 BUILD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build")
@@ -46,13 +46,14 @@ def build_static_network(cfg: Config = CONFIG, out_dir: str | None = None) -> tu
 def build_scenario_files(net: Network, s: Scenario, cfg: Config = CONFIG, out_dir: str | None = None) -> dict:
     """Write the routes file for one scenario. Returns paths and the generated demand."""
     cars, amb = generate_demand(net, s, cfg)
-    key = f"{s.density}_{s.rate}_{s.seed}_{s.origin}_{s.dest}_{'+'.join(sorted(s.blocked)) or 'open'}"
+    ambs = generate_ambulances(net, s, cfg) if s.ambulances else ([amb] if amb else [])
+    key = f"{s.density}_{s.rate}_{s.seed}_{s.origin}_{s.dest}_{'+'.join(sorted(s.blocked)) or 'open'}_{len(ambs)}a"
     out_dir = out_dir or os.path.join(BUILD_DIR, "scenarios")
     os.makedirs(out_dir, exist_ok=True)
     routes = os.path.join(out_dir, key + ".rou.xml")
-    write_routes(cars, amb, routes, cfg)
+    write_routes(cars, ambs[0] if ambs else None, routes, cfg, extra_ambs=ambs[1:])
     digest = hashlib.sha1(open(routes, "rb").read()).hexdigest()
-    return {"routes": routes, "cars": cars, "amb": amb, "sha1": digest}
+    return {"routes": routes, "cars": cars, "amb": ambs[0] if ambs else None, "ambs": ambs, "sha1": digest}
 
 
 def start_sumo(net_path: str, routes_path: str, seed: int, label: str, cfg: Config = CONFIG):
