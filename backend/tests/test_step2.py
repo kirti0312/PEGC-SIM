@@ -161,7 +161,9 @@ def test_audit_detects_conflict_and_mismatch(sumo_bank):
 
 # ---------------- whole runs ----------------
 def test_strategy_not_ready_yet():
-    for sid in ("B", "C"):
+    # Step 3 built Strategy B; C, C1 and C2 arrive in Step 4.
+    assert make_strategy("A").id == "A" and make_strategy("B").id == "B"
+    for sid in ("C", "C1", "C2"):
         with pytest.raises(NotImplementedError):
             make_strategy(sid)
 
@@ -178,7 +180,9 @@ def test_run_has_all_metrics_and_is_clean(run7):
         assert k in m
     assert m["ambFinished"] and 60 < m["ambTravelTime"] < 400
     assert m["avgWait"] > 0 and m["maxQueue"] >= 1 and m["throughput"] > 0 and m["recoveryBaseline"] is not None
-    assert m["violations"] == 0 and run7.safety["byRule"] == {"conflict": 0, "mismatch": 0, "min_green": 0}
+    # Step 3 added more rule counters (yellow, all_red, hold_cap, max_wait); every one must still be 0
+    assert m["violations"] == 0 and {"conflict", "mismatch", "min_green"} <= set(run7.safety["byRule"])
+    assert all(n == 0 for n in run7.safety["byRule"].values())
     kinds = [e["kind"] for e in run7.log]
     assert kinds == ["enter", "pass", "arrive"]
     assert run7.series and run7.switches > 50

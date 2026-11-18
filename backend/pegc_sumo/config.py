@@ -49,6 +49,10 @@ class Config:
     max_wait: float = 90.0
     lockout: float = 4.0
     fixed_green: float = 20.0
+    # strategy B (mirrors bTriggerDistance in config.js)
+    b_trigger_distance: float = 120.0   # m from the stop line
+    # rule-based ETA (mirrors cEtaCruise in config.js; also used by Strategy C from Step 4)
+    c_eta_cruise: float = 14.5          # m/s assumed cruise speed in the rule-based ETA
 
 
 CONFIG = Config()
