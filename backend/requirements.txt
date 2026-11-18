@@ -2,3 +2,4 @@ eclipse-sumo
 traci
 sumolib
 pytest
+matplotlib
