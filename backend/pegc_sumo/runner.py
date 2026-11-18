@@ -10,7 +10,7 @@ from .config import CONFIG, Config, Scenario
 from .metrics import MetricsRecorder
 from .network import sumo_edge_id
 from .signals import SignalBank
-from .strategies import make_strategy
+from .strategies import ApproachData, JunctionData, OutData, make_strategy
 from .sumo_io import build_scenario_files, build_static_network, start_sumo
 
 
@@ -23,6 +23,9 @@ class RunContext:
     amb: AmbTracker | None = None                       # ambulance position / upcoming junctions
     queue_ahead: Callable | None = None                 # queue_ahead(Upcoming) -> queued vehicles ahead
     log: Callable | None = None                         # log(t, junction, kind, text, **data)
+    junction_data: Callable | None = None               # junction_data(jid) -> strategies.JunctionData (Strategy C)
+    recovery_time: float | None = None                  # set once the queues have recovered (Strategy C)
+    total_queued: int = 0                               # vehicles currently queued at all junction approaches
 
     def log_event(self, junction, kind: str, text: str, **data) -> None:
         if self.log is not None:
@@ -86,6 +89,49 @@ def run_scenario(s: Scenario, strategy: str = "A", label: str | None = None, cfg
             if net.nodes[e.to].type == "junction":
                 approach[sumo_edge_id(e.id)] = (e.to, "H" if net.nodes[e.frm].y == net.nodes[e.to].y else "V")
 
+        # --- junction data for Strategy C (read lazily from SUMO, cached for one step) ---
+        approach_edges = {}     # junction -> {axis: [sumo edge ids that end at it]}
+        out_edges = {}          # junction -> {axis: [sumo edge ids that start at it]}
+        for e in net.edges:
+            axis = "H" if net.nodes[e.frm].y == net.nodes[e.to].y else "V"
+            if net.nodes[e.to].type == "junction":
+                approach_edges.setdefault(e.to, {"H": [], "V": []})[axis].append(sumo_edge_id(e.id))
+            if net.nodes[e.frm].type == "junction":
+                out_edges.setdefault(e.frm, {"H": [], "V": []})[axis].append(sumo_edge_id(e.id))
+        jd_cache: dict = {"t": None, "data": {}}
+        len_cache: dict = {}
+
+        def lane_len(edge: str) -> float:
+            if edge not in len_cache:
+                len_cache[edge] = conn.lane.getLength(edge + "_0")
+            return len_cache[edge]
+
+        def junction_data(jid: str) -> JunctionData:
+            if jd_cache["t"] != ctx.t:
+                jd_cache["t"], jd_cache["data"] = ctx.t, {}
+            if jid in jd_cache["data"]:
+                return jd_cache["data"][jid]
+            d = JunctionData()
+            for axis in ("H", "V"):
+                for edge in approach_edges.get(jid, {}).get(axis, []):
+                    L = lane_len(edge)
+                    a = ApproachData()
+                    for vid in conn.lane.getLastStepVehicleIDs(edge + "_0"):
+                        speed = conn.vehicle.getSpeed(vid)
+                        streak = rec.streak.get(vid, 0.0)
+                        a.veh.append((L - conn.vehicle.getLanePosition(vid), speed, streak))
+                        if speed < cfg.queue_speed:
+                            a.queue += 1
+                            a.queue_streak = max(a.queue_streak, streak)
+                    d.approach[axis].append(a)
+                for edge in out_edges.get(jid, {}).get(axis, []):
+                    d.out[axis].append(OutData(lane_len(edge), [conn.vehicle.getLength(v)
+                                                                for v in conn.lane.getLastStepVehicleIDs(edge + "_0")]))
+            jd_cache["data"][jid] = d
+            return d
+
+        ctx.junction_data = junction_data
+
         steps = int(round(cfg.max_sim_time / cfg.dt))
         for k in range(steps):
             ctx.t = k * cfg.dt
@@ -118,6 +164,8 @@ def run_scenario(s: Scenario, strategy: str = "A", label: str | None = None, cfg
             bank.queue_by_junction = qj                           # used by the safety layer in the next step
             bank.audit()
             rec.on_step(t_end, departed, arrived, vehicles)
+            ctx.recovery_time = rec.recovery_time                 # read by Strategy C in the next step
+            ctx.total_queued = rec.total_queued
         m = rec.metrics()
         m["violations"] = bank.violations
         safety = {"violations": bank.violations, "byRule": dict(bank.by_rule), "requests": dict(bank.request_stats)}

@@ -53,6 +53,15 @@ class Config:
     b_trigger_distance: float = 120.0   # m from the stop line
     # rule-based ETA (mirrors cEtaCruise in config.js; also used by Strategy C from Step 4)
     c_eta_cruise: float = 14.5          # m/s assumed cruise speed in the rule-based ETA
+    # strategy C / PEGC (mirror config.js; added in Step 4)
+    c_lookahead_junctions: int = 2
+    c_discharge_headway: float = 2.0    # s per queued vehicle discharge
+    c_min_delay_saved: float = 1.0      # s; below this PEGC does not intervene
+    c_weight_amb_delay: float = 12.0    # value of one second of ambulance delay
+    c_cost_per_car: float = 1.0         # cost of one second of delay for one cross-street car
+    c_wait_weight: float = 0.5          # weight on the longest cross-street wait
+    c_spillback_penalty: float = 4.0
+    c_recovery_max: float = 60.0        # s: recovery mode timeout per junction
 
 
 CONFIG = Config()

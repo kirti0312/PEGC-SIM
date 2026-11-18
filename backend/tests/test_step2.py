@@ -160,12 +160,12 @@ def test_audit_detects_conflict_and_mismatch(sumo_bank):
 
 
 # ---------------- whole runs ----------------
-def test_strategy_not_ready_yet():
-    # Step 3 built Strategy B; C, C1 and C2 arrive in Step 4.
-    assert make_strategy("A").id == "A" and make_strategy("B").id == "B"
-    for sid in ("C", "C1", "C2"):
-        with pytest.raises(NotImplementedError):
-            make_strategy(sid)
+def test_strategy_factory():
+    # Step 4 built C, C1 and C2.
+    for sid in ("A", "B", "C", "C1", "C2"):
+        assert make_strategy(sid).id == sid
+    with pytest.raises(ValueError):
+        make_strategy("Z")
 
 
 @pytest.fixture(scope="module")

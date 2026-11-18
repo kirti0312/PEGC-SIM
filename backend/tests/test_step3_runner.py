@@ -85,7 +85,8 @@ class FakeConn:
                                                 getDepartedIDList=lambda: list(self._departed),
                                                 getArrivedIDList=lambda: list(self._arrived))
         self.vehicle = types.SimpleNamespace(subscribe=self._subscribe, getAllSubscriptionResults=self._results,
-                                             getLanePosition=self._lane_pos, getSpeed=self._speed)
+                                             getLanePosition=self._lane_pos, getSpeed=self._speed,
+                                             getLength=lambda vid: 4.5)
         self.lane = types.SimpleNamespace(getLength=lambda lane: self.len[lane.rsplit("_", 1)[0]],
                                           getLastStepVehicleIDs=self._lane_vehicles)
         self.cars = {}          # stopped queue cars: id -> (edge, pos)
@@ -251,6 +252,6 @@ def test_runner_a_and_b_share_signals_until_the_ambulance_is_near(fake_sumo):
     assert [s for s in a.series if s[0] <= CONFIG.warmup] == [s for s in b.series if s[0] <= CONFIG.warmup]
 
 
-def test_runner_rejects_unbuilt_strategies(fake_sumo):
-    with pytest.raises(NotImplementedError):
-        runner.run_scenario(Scenario(seed=7, density="low"), "C", label="fake_c")
+def test_runner_rejects_unknown_strategies(fake_sumo):
+    with pytest.raises(ValueError):
+        runner.run_scenario(Scenario(seed=7, density="low"), "Z", label="fake_z")

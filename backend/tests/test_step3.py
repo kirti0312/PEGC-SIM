@@ -475,11 +475,9 @@ def test_b_behaves_exactly_like_a_without_an_ambulance():
     assert a.switch_log == b.switch_log and a.violations == b.violations == 0
 
 
-def test_make_strategy_b_ready_and_c_not():
-    assert make_strategy("B").id == "B"
-    for sid in ("C", "C1", "C2"):
-        with pytest.raises(NotImplementedError):
-            make_strategy(sid)
+def test_make_strategy_knows_a_b_c_c1_c2():
+    for sid in ("A", "B", "C", "C1", "C2"):
+        assert make_strategy(sid).id == sid
 
 
 # =====================================================================================

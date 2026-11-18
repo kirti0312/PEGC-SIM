@@ -34,6 +34,11 @@ class JunctionSignal:
     last_yellow_dur: float | None = None
     last_red_dur: float | None = None
     b_active: bool = False               # Strategy B: currently requesting for the ambulance
+    # --- Strategy C bookkeeping (port of sig.c and sig.ambPassedAt in src/engine/signals.js) ---
+    amb_passed_at: float | None = None
+    c_mode: str = "idle"                 # idle | declined | prepare | active | passed
+    c_recovering: bool = False
+    c_last_logged: str = ""
 
     @staticmethod
     def make(junction_id: str, idx: int, cfg: Config = CONFIG) -> "JunctionSignal":
