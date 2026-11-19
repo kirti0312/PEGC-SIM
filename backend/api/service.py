@@ -157,6 +157,7 @@ class Run:
     results: dict | None = None    # compare only
     error: str | None = None
     snapshots: list = field(default_factory=list)
+    log: list | None = None        # full decision log of a single run (sent with the WebSocket summary)
     done: threading.Event = field(default_factory=threading.Event)
     created: float = field(default_factory=time.time)
 
@@ -199,15 +200,30 @@ class RunManager:
                     "waiting": sum(1 for r in self.runs.values() if r.status == "queued")}
 
     def _sampler(self, run: Run):
-        last = [None]
+        """on_step callback. Wall-clock sampling; log entries of skipped steps are carried into the next kept snapshot.
+        `frame_wanted` tells a runner that supports per-vehicle frames when to build one (Step 9a)."""
+        st = {"last": None, "armed": False, "frames": False, "pending": []}
+
+        def due() -> bool:
+            return st["last"] is None or time.monotonic() - st["last"] >= self.interval
+
+        def frame_wanted() -> bool:
+            st["frames"] = True
+            st["armed"] = due()
+            return st["armed"]
 
         def on_step(snap):
-            now = time.monotonic()
-            if last[0] is not None and now - last[0] < self.interval:
+            st["pending"].extend(snap.get("log") or [])
+            keep = st["armed"] if st["frames"] else due()
+            st["armed"] = False
+            if not keep:
                 return
-            last[0] = now
+            st["last"] = time.monotonic()
             if len(run.snapshots) < self.max_snapshots:
-                run.snapshots.append({"engine": ENGINE, "run_id": run.id, "strategy": run.strategies[0], **clean(snap)})
+                out = {k: v for k, v in snap.items() if k != "log"}
+                out["log"], st["pending"] = st["pending"], []
+                run.snapshots.append({"engine": ENGINE, "run_id": run.id, "strategy": run.strategies[0], **clean(out)})
+        on_step.frame_wanted = frame_wanted
         return on_step
 
     def _worker(self):
@@ -224,6 +240,8 @@ class RunManager:
                     res = self.runner(run.scenario, st, f"api_{run.id}_{st}", cfg,
                                       self._sampler(run) if run.kind == "run" else None)
                     results[st] = summarize(res)
+                    if run.kind == "run":
+                        run.log = clean(getattr(res, "log", None))
                 if run.kind == "run":
                     run.summary = results[run.strategies[0]]
                 else:

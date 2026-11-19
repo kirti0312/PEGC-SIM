@@ -112,7 +112,8 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
                     break
                 await asyncio.sleep(0.05)
             if run.status == "done":
-                await ws.send_json({"type": "summary", "id": run.id, "status": "done", **run.meta, "summary": run.summary})
+                await ws.send_json({"type": "summary", "id": run.id, "status": "done", **run.meta, "summary": run.summary,
+                                    "log": run.log or []})
             else:
                 await ws.send_json({"type": "error", "engine": ENGINE, "id": run.id, "detail": run.error})
             await ws.close()

@@ -7,6 +7,7 @@ from typing import Callable
 
 from .ambinfo import AmbState, AmbTracker
 from .config import CONFIG, Config, Scenario
+from .frame import FrameBuilder
 from .metrics import MetricsRecorder
 from .network import sumo_edge_id
 from .signals import SignalBank
@@ -134,6 +135,12 @@ def run_scenario(s: Scenario, strategy: str = "A", label: str | None = None, cfg
 
         ctx.junction_data = junction_data
 
+        # Step 9a: browser-format vehicle frames, built only for the steps the sampler asks for
+        builder = FrameBuilder(net, cfg, lambda e: lane_len(e), lambda vid: list(conn.vehicle.getRoute(vid))) if on_step else None
+        frame_wanted = getattr(on_step, "frame_wanted", None)
+        last_speed: dict = {}
+        log_i = 0
+
         steps = int(round(cfg.max_sim_time / cfg.dt))
         for k in range(steps):
             ctx.t = k * cfg.dt
@@ -147,8 +154,8 @@ def run_scenario(s: Scenario, strategy: str = "A", label: str | None = None, cfg
             arrived = list(conn.simulation.getArrivedIDList())
             for vid in departed:
                 watched = [tc.VAR_SPEED, tc.VAR_ROAD_ID]
-                if vid == amb_id:
-                    watched.append(tc.VAR_LANEPOSITION)            # only the ambulance needs its lane position
+                if vid == amb_id or on_step is not None:
+                    watched.append(tc.VAR_LANEPOSITION)            # the ambulance (and, for live frames, every vehicle)
                 conn.vehicle.subscribe(vid, watched)
             res = conn.vehicle.getAllSubscriptionResults()
             vehicles = {vid: (r[tc.VAR_SPEED], r[tc.VAR_ROAD_ID]) for vid, r in res.items() if tc.VAR_SPEED in r}
@@ -170,9 +177,22 @@ def run_scenario(s: Scenario, strategy: str = "A", label: str | None = None, cfg
             ctx.total_queued = rec.total_queued
             if on_step is not None:
                 st = tracker.state if tracker is not None else None
-                on_step({"t": t_end, "queued": rec.total_queued, "vehicles": len(vehicles),
-                         "signals": {j: {"phase": sg.phase, "green_axis": sg.green_axis} for j, sg in bank.signals.items()},
-                         "amb": None if st is None else {"road": st.road, "pos": st.pos, "speed": st.speed}})
+                amb_snap = None if st is None else {"road": st.road, "pos": st.pos, "speed": st.speed}
+                snap = {"t": t_end, "queued": rec.total_queued, "vehicles": len(vehicles),
+                        "signals": {j: {"phase": sg.phase, "green_axis": sg.green_axis, "timer": sg.timer}
+                                    for j, sg in bank.signals.items()},
+                        "amb": amb_snap, "log": rec.log[log_i:]}
+                log_i = len(rec.log)
+                if frame_wanted is None or frame_wanted():
+                    snap["veh"] = builder.frame(((vid, r[tc.VAR_ROAD_ID], r[tc.VAR_LANEPOSITION], r[tc.VAR_SPEED])
+                                                 for vid, r in res.items()
+                                                 if tc.VAR_SPEED in r and tc.VAR_LANEPOSITION in r), last_speed)
+                    if amb_snap is not None:
+                        p = builder.pose(amb_id, st.road, st.pos)
+                        if p is not None:
+                            amb_snap["edge"], amb_snap["s"], amb_snap["prev"] = p[0], round(p[1], 2), p[2]
+                last_speed = {vid: v[0] for vid, v in vehicles.items()}
+                on_step(snap)
         m = rec.metrics()
         m["violations"] = bank.violations
         safety = {"violations": bank.violations, "byRule": dict(bank.by_rule), "requests": dict(bank.request_stats)}
