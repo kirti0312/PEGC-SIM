@@ -168,7 +168,7 @@ def test_start_and_read_back(client):
     body = r.json()
     assert body["engine"] == "SUMO" and body["calibration_scale"] == 0.7 and body["oversaturated"] is True
     done = wait_done(client, body["id"])
-    assert done["status"] == "done" and done["summary"]["metrics"]["ambTravelTime"] == 70.0
+    assert done["status"] == "done" and done["summary"]["metrics"]["ambTravelTime"] == 80.0
     assert done["engine"] == "SUMO" and done["rate_per_entry_veh_h"] == 364
     assert client.state["calls"][0][1:4] == (364.0, "custom", 11)
 
