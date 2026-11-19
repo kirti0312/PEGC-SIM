@@ -61,6 +61,9 @@ class Config:
     c_cost_per_car: float = 1.0         # cost of one second of delay for one cross-street car
     c_wait_weight: float = 0.5          # weight on the longest cross-street wait
     c_spillback_penalty: float = 4.0
+    # Strategy C3 (Step 5b, SUMO-side variant, NOT in the JS engine): weight on the longest cross-street wait.
+    # Default = c_wait_weight, so C3 behaves exactly like C until this is changed.
+    c3_wait_weight: float = 0.5
     c_recovery_max: float = 60.0        # s: recovery mode timeout per junction
 
 

@@ -16,16 +16,23 @@ import math
 import os
 import sys
 
-from .batch import DEFAULT_RESULTS, HERE, STRATEGIES, read_csv
+from pegc_sumo.config import CONFIG
+
+from .batch import ALL_STRATEGIES as STRATEGIES
+from .batch import DEFAULT_RESULTS, HERE, read_csv
 
 # column, label, which direction is better
 METRICS = (("amb_time", "Ambulance travel time (s)", "lower"), ("amb_stops", "Ambulance stops", "lower"),
            ("avg_wait", "Other drivers' average wait (s)", "lower"), ("longest_wait", "Longest single wait (s)", "lower"),
            ("max_queue", "Largest queue (vehicles)", "lower"), ("throughput", "Throughput (veh/h)", "higher"),
-           ("recovery_time", "Recovery time (s)", "lower"))
+           ("recovery_time", "Recovery time (s)", "lower"),
+           ("wait_p95", "95th-percentile wait per vehicle (s)", "lower"),
+           ("q60_after", "Total queue 60 s after the ambulance passed", "lower"),
+           ("q120_after", "Total queue 120 s after the ambulance passed", "lower"))
 AMB_ONLY = {"amb_time", "amb_stops"}
 HEADLINE = ("amb_time", "avg_wait", "max_queue")
 COLORS = {"A": "#7f7f7f", "B": "#1f77b4", "C": "#d95f02", "C1": "#e6ab02", "C2": "#7570b3"}
+AMB_LIMIT = CONFIG.max_sim_time - CONFIG.warmup      # ambulance enters at warm-up; an unfinished run is capped here
 PAIR_KEYS = ("split", "density", "origin", "dest", "blocked", "seed")
 
 
@@ -74,8 +81,108 @@ def summarize(rows: list, level: str = "density") -> list:
                 rec[f"{metric}_pct_vs_A"] = None if (m is None or not a_mean) else (m - a_mean) / a_mean * 100.0
                 rec[f"{metric}_paired_diff"] = mean_std(diffs)[0]
                 rec[f"{metric}_pairs"] = len(diffs)
+            # sensitivity: an ambulance that did not finish counts as the time limit instead of being dropped
+            def capped(rows_):
+                return [r["amb_time"] if r.get("amb_finished") and r.get("amb_time") is not None else AMB_LIMIT
+                        for r in rows_]
+            cap_mean = mean_std(capped(mine))[0]
+            cap_a = mean_std(capped(list(base.values())))[0]
+            rec["amb_finished"] = sum(1 for r in mine if r.get("amb_finished"))
+            rec["amb_time_limit_mean"] = cap_mean
+            rec["amb_time_limit_pct_vs_A"] = None if (cap_mean is None or not cap_a) else (cap_mean - cap_a) / cap_a * 100.0
             out.append(rec)
     return out
+
+
+def grid(summary: list, split: str, cell, title: str) -> str:
+    """One line per density x route x blockage cell (detail summary), one column per strategy; cell(rec) -> text."""
+    recs = [r for r in summary if r["split"] == split]
+    strats = [s for s in STRATEGIES if any(r["strategy"] == s for r in recs)]
+    lines = [f"\n[{split} seeds] {title}", f"{'cell':<26}" + "".join(f"{s:<17}" for s in strats)]
+    keys = sorted({(r["density"], r["origin"], r["dest"], r["blocked"]) for r in recs},
+                  key=lambda k: (("low", "medium", "high").index(k[0]), k[1], k[3]))
+    for k in keys:
+        name = f"{k[0]} {k[1]}>{k[2]} {k[3]}"
+        row = {r["strategy"]: r for r in recs if (r["density"], r["origin"], r["dest"], r["blocked"]) == k}
+        lines.append(f"{name:<26}" + "".join(f"{(cell(row[s]) if s in row else '-'):<17}" for s in strats))
+    return "\n".join(lines)
+
+
+def _pct(rec, key):
+    v = rec.get(key)
+    return "n/a" if v is None else f"{v:+.1f}%"
+
+
+def format_cell_reports(detail: list) -> str:
+    out = []
+    for split in sorted({r["split"] for r in detail}):
+        out.append(grid(detail, split, lambda r: f"{r['amb_finished']}/{r['runs']}",
+                        "ambulance FINISHED runs per cell (finished/total)"))
+        out.append(grid(detail, split, lambda r: f"{r['amb_time_limit_mean']:.1f} ({_pct(r, 'amb_time_limit_pct_vs_A')})"
+                        if r["amb_time_limit_mean"] is not None else "n/a",
+                        f"SENSITIVITY: ambulance time, unfinished runs counted as the {AMB_LIMIT:.0f} s limit "
+                        f"(mean, % vs A)"))
+        out.append(grid(detail, split, lambda r: f"{r['longest_wait_mean']:.1f} ({_pct(r, 'longest_wait_pct_vs_A')})"
+                        if r["longest_wait_mean"] is not None else "n/a", "longest single wait per cell (mean s, % vs A)"))
+    return "\n".join(out)
+
+
+def paired_vs(rows: list, strat: str, ref: str, metrics=("amb_time", "avg_wait", "longest_wait", "wait_p95", "max_queue",
+                                                           "q60_after", "q120_after")) -> list:
+    """Mean of (strat - ref) on the identical scenario and seed, per split and density. Positive = strat higher."""
+    out = []
+    for split in sorted({r["split"] for r in rows}):
+        for density in ("low", "medium", "high"):
+            sel = [r for r in rows if r["split"] == split and r["density"] == density]
+            ref_by = {tuple(r[k] for k in PAIR_KEYS): r for r in sel if r["strategy"] == ref}
+            rec = {"split": split, "density": density}
+            for m in metrics:
+                d = []
+                for r in sel:
+                    if r["strategy"] != strat:
+                        continue
+                    o = ref_by.get(tuple(r[k] for k in PAIR_KEYS))
+                    x, y = _valid(r, m), (_valid(o, m) if o else None)
+                    if x is not None and y is not None:
+                        d.append(x - y)
+                rec[m] = (mean_std(d)[0], len(d))
+            if any(rec[m][1] for m in metrics):
+                out.append(rec)
+    return out
+
+
+def format_paired(rows: list, strat: str, ref: str) -> str:
+    recs = paired_vs(rows, strat, ref)
+    if not recs:
+        return ""
+    ms = [m for m in recs[0] if m not in ("split", "density")]
+    lines = [f"\n{strat} minus {ref}, paired on identical scenario and seed (mean difference; positive = {strat} is HIGHER = worse "
+             f"for every metric here; n pairs in brackets)", f"{'':<14}" + "".join(f"{m:<18}" for m in ms)]
+    for r in recs:
+        lines.append(f"{r['split'] + ' ' + r['density']:<14}" + "".join(
+            f"{'n/a' if r[m][0] is None else format(r[m][0], '+.2f') + ' (' + str(r[m][1]) + ')':<18}" for m in ms))
+    return "\n".join(lines)
+
+
+def compare_baseline(rows: list, base: list) -> tuple:
+    """Re-run determinism check: for runs present in both files (same split, strategy, scenario, seed), compare every
+    column the OLD file has. Returns (runs compared, identical runs, [first mismatches])."""
+    key = lambda r: (r["split"], r["strategy"], r["density"], r["origin"], r["dest"], r["blocked"], r["seed"])
+    new = {key(r): r for r in rows}
+    cols = [c for c in base[0] if c not in ("c3_weight",)] if base else []
+    n = same = 0
+    bad = []
+    for b in base:
+        r = new.get(key(b))
+        if r is None:
+            continue
+        n += 1
+        diff = [c for c in cols if r.get(c) != b.get(c)]
+        if diff:
+            bad.append((key(b), diff))
+        else:
+            same += 1
+    return n, same, bad[:5]
 
 
 def write_summary(summary: list, path: str) -> None:
@@ -155,6 +262,7 @@ def main(argv=None) -> int:
     p.add_argument("--outdir", default=HERE)
     p.add_argument("--split", default="test", help="seed split used for the charts")
     p.add_argument("--no-charts", action="store_true")
+    p.add_argument("--baseline", default=None, help="frozen results.csv: check that shared runs are unchanged")
     args = p.parse_args(argv)
     if not os.path.exists(args.csv):
         print(f"{args.csv} not found; run python -m experiments.batch first", file=sys.stderr)
@@ -165,6 +273,14 @@ def main(argv=None) -> int:
     write_summary(by_density, os.path.join(args.outdir, "summary_by_density.csv"))
     write_summary(detail, os.path.join(args.outdir, "summary_detail.csv"))
     print(format_tables(by_density))
+    print(format_cell_reports(detail))
+    for strat, ref in (("C3", "C"), ("C", "A")):
+        if any(r["strategy"] == strat for r in rows):
+            print(format_paired(rows, strat, ref))
+    if args.baseline:
+        n, same, bad = compare_baseline(rows, read_csv(args.baseline))
+        print(f"\nBaseline check vs {args.baseline}: {same}/{n} shared runs identical in every old column"
+              + ("" if n == same else f"; first differences: {bad}"))
     bad = sum(r["violations"] or 0 for r in rows)
     print(f"\nTotal safety violations over all runs: {bad} (must be 0)")
     if not args.no_charts:

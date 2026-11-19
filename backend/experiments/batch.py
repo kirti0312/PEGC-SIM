@@ -22,6 +22,7 @@ import os
 import sys
 import time
 import traceback
+from dataclasses import replace
 
 from pegc_sumo.config import CONFIG, Scenario, entry_rate
 from pegc_sumo.network import build_network, find_route
@@ -30,7 +31,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CALIBRATION = os.path.join(HERE, "calibration.json")
 DEFAULT_RESULTS = os.path.join(HERE, "results.csv")
 
-STRATEGIES = ("A", "B", "C", "C1", "C2")
+STRATEGIES = ("A", "B", "C", "C1", "C2")            # the Step 5 grid (default)
+ALL_STRATEGIES = STRATEGIES + ("C3",)                  # C3: Step 5b SUMO-side variant (cost weight on long cross waits)
 DENSITIES = ("low", "medium", "high")
 ROUTES = (("W0", "E1"), ("W1", "E0"))          # W0>E1 is the route used since Step 1; W1>E0 crosses other junctions
 TUNE_SEEDS = (1, 2, 3, 4, 5)
@@ -38,14 +40,17 @@ TEST_SEEDS = tuple(range(101, 111))
 
 COLUMNS = ["split", "strategy", "density", "rate", "scale", "origin", "dest", "blocked", "seed",
            "amb_finished", "amb_time", "amb_stops", "avg_wait", "longest_wait", "max_queue", "throughput",
-           "completed", "entered", "recovery_time", "recovery_baseline", "violations", "switches", "routes_sha1"]
+           "completed", "entered", "recovery_time", "recovery_baseline", "violations", "switches", "routes_sha1",
+           # Step 5b: appended, existing columns unchanged
+           "wait_p95", "q60_after", "q120_after", "c3_weight"]
 STR_COLS = {"split", "strategy", "density", "origin", "dest", "blocked", "routes_sha1"}
 INT_COLS = {"rate", "seed", "amb_finished", "amb_stops", "completed", "entered", "violations", "switches"}
 # CSV column -> key in RunResult.metrics
 METRIC_KEYS = {"amb_finished": "ambFinished", "amb_time": "ambTravelTime", "amb_stops": "ambStops",
                "avg_wait": "avgWait", "longest_wait": "longestWait", "max_queue": "maxQueue",
                "throughput": "throughput", "completed": "completed", "entered": "entered",
-               "recovery_time": "recoveryTime", "recovery_baseline": "recoveryBaseline", "violations": "violations"}
+               "recovery_time": "recoveryTime", "recovery_baseline": "recoveryBaseline", "violations": "violations",
+               "wait_p95": "waitP95"}
 
 
 # ----------------------------------------------------------------------------------------------- grid
@@ -91,27 +96,51 @@ def build_jobs(scale: float, strategies=STRATEGIES, densities=DENSITIES, routes=
 
 
 # ----------------------------------------------------------------------------------------------- running
-def make_row(job: dict, strategy: str, result) -> dict:
+def queue_after_pass(result, seconds: float):
+    """Total queue (vehicles) `seconds` after the ambulance cleared its last junction, from the run's own log and
+    queue series (1 s samples): the first sample at or after t_pass + seconds. None if the ambulance never cleared
+    its last junction or the run ended before that time."""
+    t_pass = next((e["data"]["time"] for e in getattr(result, "log", []) if e["kind"] == "pass" and "time" in e["data"]), None)
+    if t_pass is None:
+        return None
+    return next((q for t, q in getattr(result, "series", []) if t >= t_pass + seconds - 1e-9), None)
+
+
+def make_row(job: dict, strategy: str, result, c3_weight=None) -> dict:
     m = result.metrics
     row = {"split": job["split"], "strategy": strategy, "density": job["density"], "rate": job["rate"],
            "scale": job["scale"], "origin": job["origin"], "dest": job["dest"],
            "blocked": "+".join(job["blocked"]) or "open", "seed": job["seed"],
-           "switches": result.switches, "routes_sha1": result.routes_sha1}
+           "switches": result.switches, "routes_sha1": result.routes_sha1,
+           "q60_after": queue_after_pass(result, 60.0), "q120_after": queue_after_pass(result, 120.0),
+           "c3_weight": c3_weight}
     for col, key in METRIC_KEYS.items():
         row[col] = m.get(key)
     row["amb_finished"] = int(bool(row["amb_finished"]))
     return row
 
 
+def split_entry(entry: str, default_weight=None):
+    """'C3@2.0' -> ('C3', 2.0); 'C3' -> ('C3', default or config default); 'A' -> ('A', None)."""
+    strategy, _, w = entry.partition("@")
+    if strategy != "C3":
+        if w:
+            raise ValueError(f"only C3 takes a weight: {entry!r}")
+        return strategy, None
+    return strategy, float(w) if w else float(default_weight if default_weight is not None else CONFIG.c3_wait_weight)
+
+
 def _run_job(job: dict) -> list:
     from pegc_sumo.runner import run_scenario
 
     rows = []
-    for strategy in job["strategies"]:
+    for entry in job["strategies"]:
+        strategy, w = split_entry(entry, job.get("c3_weight"))
+        extra = {"cfg": replace(CONFIG, c3_wait_weight=w)} if strategy == "C3" else {}
         s = Scenario(origin=job["origin"], dest=job["dest"], density="custom", rate=float(job["rate"]),
                      seed=job["seed"], blocked=tuple(job["blocked"]))
-        result = run_scenario(s, strategy, label=f"b{os.getpid()}_{job['id']}_{strategy}")
-        rows.append(make_row(job, strategy, result))
+        result = run_scenario(s, strategy, label=f"b{os.getpid()}_{job['id']}_{entry}", **extra)
+        rows.append(make_row(job, strategy, result, c3_weight=w if strategy == "C3" else None))
     return rows
 
 
@@ -199,6 +228,8 @@ def main(argv=None, run_job=None) -> int:
     p.add_argument("--split", choices=("tune", "test", "all"), default="all")
     p.add_argument("--strategies", default=",".join(STRATEGIES))
     p.add_argument("--densities", default=",".join(DENSITIES))
+    p.add_argument("--c3-weight", type=float, default=None,
+                   help="cross-wait weight for Strategy C3 (default: config c3_wait_weight, i.e. same as C); recorded in the CSV")
     args = p.parse_args(argv)
 
     scale = args.scale
@@ -216,9 +247,11 @@ def main(argv=None, run_job=None) -> int:
     kw = {}
     if args.quick:
         kw.update(routes=ROUTES[:1], blocked_options=(False,), tune_seeds=(1,), test_seeds=(101,))
-    jobs = build_jobs(scale, strategies=_csv_list(args.strategies, STRATEGIES, "strategy"),
+    jobs = build_jobs(scale, strategies=_csv_list(args.strategies, ALL_STRATEGIES, "strategy"),
                       densities=_csv_list(args.densities, DENSITIES, "density"),
                       splits=("tune", "test") if args.split == "all" else (args.split,), **kw)
+    for j in jobs:
+        j["c3_weight"] = args.c3_weight
     print(f"{len(jobs)} scenarios x {len(jobs[0]['strategies'])} strategies = "
           f"{len(jobs) * len(jobs[0]['strategies'])} runs, traffic scale {scale}, {args.workers} worker(s)", file=sys.stderr)
     if run_job is None:

@@ -154,7 +154,7 @@ def timing(sig, A: str, cfg) -> Timing:
     return Timing(False, r, r, fixed_seq=True)
 
 
-def evaluate(ctx, sig, u, extra: float, queue_aware: bool):
+def evaluate(ctx, sig, u, extra: float, queue_aware: bool, c3: bool = False):
     """Decide what to request at the junction `u` the ambulance is approaching. Returns (request, predicted_pass, eta)."""
     cfg = ctx.cfg
     A = u.axis
@@ -199,7 +199,7 @@ def evaluate(ctx, sig, u, extra: float, queue_aware: bool):
     occ = out_occupancy(data, A, cfg)
     benefit = cfg.c_weight_amb_delay * delay_saved
     spill = cfg.c_spillback_penalty * 20 * max(0, occ - 0.5)
-    cost = cfg.c_cost_per_car * cars * lost_green + cfg.c_wait_weight * longest + spill
+    cost = cfg.c_cost_per_car * cars * lost_green + (cfg.c3_wait_weight if c3 else cfg.c_wait_weight) * longest + spill
 
     if sig.c_mode == "active":
         mode = "active"                         # sticky until the ambulance has passed
@@ -260,8 +260,9 @@ class StrategyC:
     the cost to cross traffic and spillback, then REQUEST the switch through the safety layer. After the
     ambulance has passed, a recovery phase serves the busier axis. C1 and C2 are the ablations."""
 
-    def __init__(self, strategy_id: str = "C", queue_aware: bool = True, recovery: bool = True):
+    def __init__(self, strategy_id: str = "C", queue_aware: bool = True, recovery: bool = True, c3: bool = False):
         self.id = strategy_id
+        self.c3 = c3
         self.queue_aware = queue_aware
         self.recovery = recovery
         self._prev: list = []                   # junctions that were ahead of the ambulance in the previous step
@@ -288,7 +289,7 @@ class StrategyC:
             extra = 0
             for u in info[:cfg.c_lookahead_junctions]:
                 sig = ctx.bank.signals[u.junction]
-                req, predicted_pass, eta = evaluate(ctx, sig, u, extra, self.queue_aware)
+                req, predicted_pass, eta = evaluate(ctx, sig, u, extra, self.queue_aware, self.c3)
                 reqs[u.junction] = req
                 extra = max(0, predicted_pass - eta) + extra
         for jid, sig in ctx.bank.signals.items():
@@ -326,4 +327,6 @@ def make_strategy(strategy_id: str):
         return StrategyC("C1", queue_aware=False, recovery=True)       # ablation: no queue awareness
     if strategy_id == "C2":
         return StrategyC("C2", queue_aware=True, recovery=False)       # ablation: no recovery
+    if strategy_id == "C3":
+        return StrategyC("C3", queue_aware=True, recovery=True, c3=True)   # SUMO-side variant: cfg.c3_wait_weight
     raise ValueError(f"Unknown strategy {strategy_id}")

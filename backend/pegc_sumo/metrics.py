@@ -9,6 +9,14 @@ from .config import CONFIG, Config
 from .network import Network, sumo_edge_id
 
 
+def percentile(sorted_values: list, q: float):
+    """Nearest-rank percentile (q in 0..100) of an ascending list; None if empty."""
+    if not sorted_values:
+        return None
+    k = max(1, -(-len(sorted_values) * q // 100))      # ceil(n*q/100)
+    return sorted_values[int(k) - 1]
+
+
 class MetricsRecorder:
     def __init__(self, net: Network, cfg: Config = CONFIG, amb_id: str = "amb0", amb_route_edges: list | None = None):
         self.cfg = cfg
@@ -26,6 +34,7 @@ class MetricsRecorder:
         self.wait = {}          # vehicle -> total waiting time
         self.streak = {}        # vehicle -> current waiting streak
         self.wait_done = 0.0
+        self.done_waits = []    # total wait of every finished ordinary vehicle (for the 95th percentile)
         self.done_count = 0
         self.completed = 0
         self.entered = 0
@@ -95,7 +104,9 @@ class MetricsRecorder:
                            time=t_end - (self.amb_enter or 0))
             elif not vid.startswith("amb"):
                 self.completed += 1
-                self.wait_done += self.wait.pop(vid, 0.0)
+                w = self.wait.pop(vid, 0.0)
+                self.wait_done += w
+                self.done_waits.append(w)
                 self.streak.pop(vid, None)
                 self.done_count += 1
         # baseline: average queue in the window before the ambulance enters
@@ -135,7 +146,9 @@ class MetricsRecorder:
             n += 1
         t_now = max(self.t, 1e-9)
         amb_time = None if self.amb_exit is None or self.amb_enter is None else self.amb_exit - self.amb_enter
+        waits = sorted([self.wait.get(v, 0.0) for v in self.live] + self.done_waits)
         return {
+            "waitP95": percentile(waits, 95.0),
             "ambTravelTime": amb_time,
             "ambFinished": self.amb_exit is not None,
             "ambStops": self.amb_stops,
