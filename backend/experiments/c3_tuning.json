@@ -1,0 +1,96 @@
+{
+ "split": "tune",
+ "seeds": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "scale": 0.7,
+ "rule": "(fixed BEFORE looking at any result): over all tuning runs pooled, a weight is feasible when its mean\nlongest single wait is <= Strategy A's. Among feasible weights pick the lowest mean ambulance time (finished runs).\nIf none is feasible, pick the lowest mean longest wait and record \"constraint_not_met\". C3 at 0.5 would equal C.",
+ "table": [
+  {
+   "name": "A",
+   "strategy": "A",
+   "weight": null,
+   "runs": 60,
+   "amb_finished": 60,
+   "amb_time": 146.8,
+   "avg_wait": 34.7088422005175,
+   "longest_wait": 52.266666666666666,
+   "wait_p95": 99.04583333333333,
+   "max_queue": 17.9,
+   "q120_after": 37.24561403508772
+  },
+  {
+   "name": "C",
+   "strategy": "C",
+   "weight": null,
+   "runs": 60,
+   "amb_finished": 60,
+   "amb_time": 89.02083333333333,
+   "avg_wait": 33.381673427598464,
+   "longest_wait": 50.9375,
+   "wait_p95": 95.475,
+   "max_queue": 16.783333333333335,
+   "q120_after": 34.733333333333334
+  },
+  {
+   "name": "C3 w=1",
+   "strategy": "C3",
+   "weight": 1.0,
+   "runs": 60,
+   "amb_finished": 60,
+   "amb_time": 89.125,
+   "avg_wait": 33.375379413513954,
+   "longest_wait": 50.84583333333333,
+   "wait_p95": 95.475,
+   "max_queue": 16.783333333333335,
+   "q120_after": 34.833333333333336
+  },
+  {
+   "name": "C3 w=2",
+   "strategy": "C3",
+   "weight": 2.0,
+   "runs": 60,
+   "amb_finished": 60,
+   "amb_time": 90.03333333333333,
+   "avg_wait": 33.45567145557066,
+   "longest_wait": 51.858333333333334,
+   "wait_p95": 95.84583333333333,
+   "max_queue": 16.95,
+   "q120_after": 35.05
+  },
+  {
+   "name": "C3 w=4",
+   "strategy": "C3",
+   "weight": 4.0,
+   "runs": 60,
+   "amb_finished": 60,
+   "amb_time": 90.24583333333334,
+   "avg_wait": 33.420043603039026,
+   "longest_wait": 51.44166666666667,
+   "wait_p95": 95.52916666666667,
+   "max_queue": 16.95,
+   "q120_after": 35.06666666666667
+  },
+  {
+   "name": "C3 w=8",
+   "strategy": "C3",
+   "weight": 8.0,
+   "runs": 60,
+   "amb_finished": 60,
+   "amb_time": 89.64583333333333,
+   "avg_wait": 33.70008661538616,
+   "longest_wait": 52.354166666666664,
+   "wait_p95": 96.13333333333334,
+   "max_queue": 17.033333333333335,
+   "q120_after": 35.916666666666664
+  }
+ ],
+ "choice": {
+  "weight": 1.0,
+  "status": "ok"
+ }
+}

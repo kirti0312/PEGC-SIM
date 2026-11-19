@@ -1,0 +1,404 @@
+{
+ "version": 1,
+ "sumo_version": "Eclipse SUMO sumo 1.28.0",
+ "method": "Strategy A, default route W0>E1, medium preset rate x scale, calibration seeds; growth = mean total queue in 360-420 s minus mean total queue in 180-240 s; a scale passes when the mean growth over the seeds <= growth_max; chosen scale = largest scale where it and every smaller scale pass.",
+ "growth_max": 6.0,
+ "windows": {
+  "early": [
+   180.0,
+   240.0
+  ],
+  "late": [
+   360.0,
+   420.0
+  ]
+ },
+ "seeds": [
+  201,
+  202,
+  203,
+  204,
+  205
+ ],
+ "route": [
+  "W0",
+  "E1"
+ ],
+ "strategy": "A",
+ "ladder": [
+  {
+   "scale": 0.4,
+   "rate": 132,
+   "mean_growth": -2.3866666666666667,
+   "max_growth": 1.5166666666666666,
+   "mean_max_queue": 6.4,
+   "mean_avg_wait": 19.03359345395983,
+   "mean_throughput": 1033.7142857142858,
+   "mean_entered": 147.4,
+   "mean_completed": 120.6,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    1.5166666666666666,
+    -7.566666666666667,
+    -2.3833333333333337,
+    -3.916666666666666,
+    0.4166666666666661
+   ],
+   "passes": true
+  },
+  {
+   "scale": 0.45,
+   "rate": 148,
+   "mean_growth": 0.9300000000000004,
+   "max_growth": 5.15,
+   "mean_max_queue": 8.4,
+   "mean_avg_wait": 22.471384952638015,
+   "mean_throughput": 1114.2857142857142,
+   "mean_entered": 166.8,
+   "mean_completed": 130.0,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    4.316666666666666,
+    -1.5999999999999996,
+    -0.9333333333333318,
+    -2.283333333333333,
+    5.15
+   ],
+   "passes": true
+  },
+  {
+   "scale": 0.5,
+   "rate": 165,
+   "mean_growth": -1.6199999999999997,
+   "max_growth": 1.9500000000000002,
+   "mean_max_queue": 7.6,
+   "mean_avg_wait": 21.23966315845041,
+   "mean_throughput": 1272.0,
+   "mean_entered": 184.2,
+   "mean_completed": 148.4,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    1.9500000000000002,
+    -3.5999999999999996,
+    -2.783333333333333,
+    -2.3666666666666654,
+    -1.3000000000000007
+   ],
+   "passes": true
+  },
+  {
+   "scale": 0.55,
+   "rate": 182,
+   "mean_growth": -1.2700000000000005,
+   "max_growth": 6.133333333333333,
+   "mean_max_queue": 10.0,
+   "mean_avg_wait": 23.524598729890222,
+   "mean_throughput": 1373.142857142857,
+   "mean_entered": 202.0,
+   "mean_completed": 160.2,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    4.083333333333333,
+    -6.716666666666667,
+    6.133333333333333,
+    -2.3000000000000007,
+    -7.550000000000001
+   ],
+   "passes": true
+  },
+  {
+   "scale": 0.6,
+   "rate": 198,
+   "mean_growth": -0.5466666666666669,
+   "max_growth": 3.283333333333335,
+   "mean_max_queue": 11.6,
+   "mean_avg_wait": 24.945527331449956,
+   "mean_throughput": 1486.2857142857142,
+   "mean_entered": 223.8,
+   "mean_completed": 173.4,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    2.9499999999999993,
+    -6.866666666666669,
+    1.333333333333334,
+    -3.4333333333333336,
+    3.283333333333335
+   ],
+   "passes": true
+  },
+  {
+   "scale": 0.65,
+   "rate": 214,
+   "mean_growth": 2.6033333333333326,
+   "max_growth": 12.649999999999999,
+   "mean_max_queue": 18.2,
+   "mean_avg_wait": 30.508700756077182,
+   "mean_throughput": 1580.5714285714287,
+   "mean_entered": 244.8,
+   "mean_completed": 184.4,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    12.649999999999999,
+    -3.6333333333333346,
+    -4.516666666666666,
+    1.1999999999999993,
+    7.316666666666666
+   ],
+   "passes": true
+  },
+  {
+   "scale": 0.7,
+   "rate": 231,
+   "mean_growth": 1.6200000000000003,
+   "max_growth": 5.116666666666667,
+   "mean_max_queue": 17.2,
+   "mean_avg_wait": 29.950268153692708,
+   "mean_throughput": 1693.7142857142856,
+   "mean_entered": 263.2,
+   "mean_completed": 197.6,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    5.116666666666667,
+    -4.266666666666666,
+    4.483333333333334,
+    -0.5,
+    3.2666666666666657
+   ],
+   "passes": true
+  },
+  {
+   "scale": 0.75,
+   "rate": 248,
+   "mean_growth": 8.786666666666667,
+   "max_growth": 25.35,
+   "mean_max_queue": 20.2,
+   "mean_avg_wait": 36.179585053018485,
+   "mean_throughput": 1738.2857142857142,
+   "mean_entered": 285.4,
+   "mean_completed": 202.8,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    4.5,
+    3.200000000000003,
+    1.9833333333333343,
+    8.899999999999999,
+    25.35
+   ],
+   "passes": false
+  },
+  {
+   "scale": 0.8,
+   "rate": 264,
+   "mean_growth": 8.726666666666667,
+   "max_growth": 18.599999999999998,
+   "mean_max_queue": 21.2,
+   "mean_avg_wait": 34.13691474877866,
+   "mean_throughput": 1834.2857142857144,
+   "mean_entered": 305.0,
+   "mean_completed": 214.0,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    12.166666666666668,
+    -6.333333333333336,
+    10.149999999999999,
+    18.599999999999998,
+    9.050000000000004
+   ],
+   "passes": false
+  },
+  {
+   "scale": 0.85,
+   "rate": 280,
+   "mean_growth": 12.206666666666667,
+   "max_growth": 17.933333333333334,
+   "mean_max_queue": 23.6,
+   "mean_avg_wait": 36.280962743559684,
+   "mean_throughput": 1916.5714285714287,
+   "mean_entered": 323.8,
+   "mean_completed": 223.6,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    17.933333333333334,
+    4.283333333333331,
+    15.049999999999997,
+    7.06666666666667,
+    16.700000000000003
+   ],
+   "passes": false
+  },
+  {
+   "scale": 0.9,
+   "rate": 297,
+   "mean_growth": 18.93,
+   "max_growth": 33.116666666666674,
+   "mean_max_queue": 26.8,
+   "mean_avg_wait": 37.97723626855814,
+   "mean_throughput": 1964.5714285714287,
+   "mean_entered": 343.4,
+   "mean_completed": 229.2,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    16.71666666666667,
+    14.81666666666667,
+    8.533333333333331,
+    21.46666666666666,
+    33.116666666666674
+   ],
+   "passes": false
+  },
+  {
+   "scale": 0.95,
+   "rate": 314,
+   "mean_growth": 21.120000000000005,
+   "max_growth": 30.66666666666667,
+   "mean_max_queue": 27.6,
+   "mean_avg_wait": 42.130274200701336,
+   "mean_throughput": 2034.8571428571427,
+   "mean_entered": 361.6,
+   "mean_completed": 237.4,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    16.800000000000004,
+    11.833333333333336,
+    22.516666666666666,
+    30.66666666666667,
+    23.78333333333334
+   ],
+   "passes": false
+  },
+  {
+   "scale": 1.0,
+   "rate": 330,
+   "mean_growth": 26.736666666666668,
+   "max_growth": 35.666666666666664,
+   "mean_max_queue": 27.0,
+   "mean_avg_wait": 42.9833538626405,
+   "mean_throughput": 2074.2857142857147,
+   "mean_entered": 382.4,
+   "mean_completed": 242.0,
+   "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+   ],
+   "growth_per_seed": [
+    20.483333333333334,
+    13.366666666666667,
+    35.666666666666664,
+    35.58333333333333,
+    28.583333333333336
+   ],
+   "passes": false
+  }
+ ],
+ "scale": 0.7,
+ "status": "ok",
+ "presets": {
+  "low": {
+   "browser_rate": 180,
+   "rate": 126,
+   "clamped": false
+  },
+  "medium": {
+   "browser_rate": 330,
+   "rate": 231,
+   "clamped": false
+  },
+  "high": {
+   "browser_rate": 520,
+   "rate": 364,
+   "clamped": false
+  }
+ },
+ "preset_checks": {
+  "low": {
+   "mean_growth": -0.11333333333333329,
+   "mean_max_queue": 5.4,
+   "saturated": false
+  },
+  "medium": {
+   "mean_growth": 1.6200000000000003,
+   "mean_max_queue": 17.2,
+   "saturated": false
+  },
+  "high": {
+   "mean_growth": 36.913333333333334,
+   "mean_max_queue": 29.6,
+   "saturated": true
+  }
+ }
+}
