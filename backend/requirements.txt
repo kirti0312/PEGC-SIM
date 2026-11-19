@@ -3,3 +3,7 @@ traci
 sumolib
 pytest
 matplotlib
+fastapi
+uvicorn
+pydantic
+httpx

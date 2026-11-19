@@ -46,7 +46,9 @@ class RunResult:
     extra: dict = field(default_factory=dict)
 
 
-def run_scenario(s: Scenario, strategy: str = "A", label: str | None = None, cfg: Config = CONFIG) -> RunResult:
+def run_scenario(s: Scenario, strategy: str = "A", label: str | None = None, cfg: Config = CONFIG,
+                 on_step: Callable | None = None) -> RunResult:
+    """on_step (optional, default None = old behaviour): called after every step with a small snapshot dict."""
     import traci.constants as tc
 
     strat = make_strategy(strategy)
@@ -166,6 +168,11 @@ def run_scenario(s: Scenario, strategy: str = "A", label: str | None = None, cfg
             rec.on_step(t_end, departed, arrived, vehicles)
             ctx.recovery_time = rec.recovery_time                 # read by Strategy C in the next step
             ctx.total_queued = rec.total_queued
+            if on_step is not None:
+                st = tracker.state if tracker is not None else None
+                on_step({"t": t_end, "queued": rec.total_queued, "vehicles": len(vehicles),
+                         "signals": {j: {"phase": sg.phase, "green_axis": sg.green_axis} for j, sg in bank.signals.items()},
+                         "amb": None if st is None else {"road": st.road, "pos": st.pos, "speed": st.speed}})
         m = rec.metrics()
         m["violations"] = bank.violations
         safety = {"violations": bank.violations, "byRule": dict(bank.by_rule), "requests": dict(bank.request_stats)}
