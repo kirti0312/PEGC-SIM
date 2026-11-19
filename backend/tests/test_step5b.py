@@ -190,12 +190,23 @@ def test_tune_main_with_fake_jobs(tmp_path):
 
 
 # ----------------------------------------------------------------------------- frozen Step 5 baseline
+def _frozen_dir():
+    here = os.path.dirname(os.path.abspath(__file__))
+    for base in (ROOT, os.path.join(here, ".."), os.getcwd(), os.path.join(os.getcwd(), "..")):
+        d = os.path.join(base, "baselines", "step5")
+        for name in ("SHA256SUMS", "SHA256SUMS.txt"):
+            if os.path.exists(os.path.join(d, name)):
+                return d, name
+    return None, None
+
+
 def test_frozen_baseline_matches_checksums_and_is_readable():
-    d = os.path.join(ROOT, "baselines", "step5")
-    if not os.path.exists(os.path.join(d, "SHA256SUMS")):
+    d, sums = _frozen_dir()
+    if d is None:
         pytest.skip("baselines/step5 not present")
-    for line in open(os.path.join(d, "SHA256SUMS")):
+    for line in open(os.path.join(d, sums)):
         digest, name = line.split()
+        name = os.path.basename(name.lstrip("*"))          # the sums file may list "baselines/step5/<file>"
         assert hashlib.sha256(open(os.path.join(d, name), "rb").read()).hexdigest() == digest, name
     rows = batch.read_csv(os.path.join(d, "results.csv"))
     assert len(rows) == 900
