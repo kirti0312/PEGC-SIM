@@ -11,7 +11,8 @@ import uuid
 from dataclasses import dataclass, field, replace
 
 from experiments.batch import rate_for
-from pegc_sumo.config import CONFIG, Scenario
+from pegc_sumo.config import CONFIG, AmbulanceSpec, Scenario
+from pegc_sumo.live import LiveControl, LiveError, MAX_AMBULANCES
 from pegc_sumo.network import build_network, find_route
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -65,8 +66,35 @@ def load_c3(path: str = C3_TUNING_PATH) -> dict:
         return {"weight": float(CONFIG.c3_wait_weight), "source": "config default", "status": None}
 
 
-def resolve(origin: str, dest: str, density: str, rate, seed, blocked, cal: dict) -> tuple:
-    """Validate and build (Scenario, meta). Presets use calibrated rates; custom is a raw veh/h per entry."""
+def _check_amb_route(net, origin, dest, blocked, what: str = "ambulance") -> None:
+    if origin not in net.boundary_ids or dest not in net.boundary_ids:
+        raise InputError(f"{what}: origin and dest must be boundary nodes: {', '.join(net.boundary_ids)}")
+    if origin == dest:
+        raise InputError(f"{what}: origin and dest must differ")
+    if find_route(net, origin, dest, frozenset(blocked)) is None:
+        raise InputError(f"{what}: blocked segments leave no valid route")
+
+
+def traffic_rate(density, rate, cal: dict) -> tuple:
+    """(veh/h per entry, density) for a live traffic change: a preset (calibrated) or a raw custom rate."""
+    if density is not None and rate is not None:
+        raise InputError("give either density or rate, not both")
+    if density is None and rate is None:
+        raise InputError("give density (low, medium, high) or rate")
+    if rate is not None:
+        if isinstance(rate, bool) or not isinstance(rate, (int, float)) or not (CONFIG.rate_min <= rate <= CONFIG.rate_max):
+            raise InputError(f"rate must be {CONFIG.rate_min} to {CONFIG.rate_max} veh/h per entry")
+        return int(round(rate)), "custom"
+    if density not in ("low", "medium", "high"):
+        raise InputError("density must be low, medium or high")
+    if cal["scale"] is None:
+        raise InputError(f"presets need a calibration scale: {cal['status']}")
+    return rate_for(density, cal["scale"]), density
+
+
+def resolve(origin: str, dest: str, density: str, rate, seed, blocked, cal: dict, ambulances=None) -> tuple:
+    """Validate and build (Scenario, meta). Presets use calibrated rates; custom is a raw veh/h per entry.
+    ambulances (Step 10, optional): list of {origin, dest, start} (1 to 3). Without it behaviour is exactly as before."""
     net = _net()
     if origin not in net.boundary_ids or dest not in net.boundary_ids:
         raise InputError(f"origin and dest must be boundary nodes: {', '.join(net.boundary_ids)}")
@@ -83,6 +111,20 @@ def resolve(origin: str, dest: str, density: str, rate, seed, blocked, cal: dict
         raise InputError(f"unknown segment(s): {', '.join(bad)}")
     if find_route(net, origin, dest, frozenset(blocked)) is None:
         raise InputError("blocked segments leave no valid route")
+    amb_specs = ()
+    if ambulances:
+        if len(ambulances) > MAX_AMBULANCES:
+            raise InputError(f"at most {MAX_AMBULANCES} ambulances")
+        for i, a in enumerate(ambulances):
+            _check_amb_route(net, a["origin"], a["dest"], blocked, f"ambulance {i}")
+            st = a.get("start")
+            if st is not None and (isinstance(st, bool) or not isinstance(st, (int, float)) or not (0 <= st <= 300)):
+                raise InputError(f"ambulance {i}: start must be 0 to 300 seconds")
+        origin, dest = ambulances[0]["origin"], ambulances[0]["dest"]
+        if len(ambulances) > 1 or ambulances[0].get("start") is not None:
+            amb_specs = tuple(AmbulanceSpec(f"amb{i}", a["origin"], a["dest"],
+                                            None if a.get("start") is None else float(a["start"]))
+                              for i, a in enumerate(ambulances))
     if density == "custom":
         if isinstance(rate, bool) or not isinstance(rate, (int, float)) or not (CONFIG.rate_min <= rate <= CONFIG.rate_max):
             raise InputError(f"custom rate must be {CONFIG.rate_min} to {CONFIG.rate_max} veh/h per entry")
@@ -105,7 +147,21 @@ def resolve(origin: str, dest: str, density: str, rate, seed, blocked, cal: dict
                          else "Calibrated so that Strategy A does not oversaturate at this level."),
         "origin": origin, "dest": dest, "seed": seed, "blocked": list(blocked),
     }
-    return Scenario(origin=origin, dest=dest, density="custom", rate=float(r), seed=seed, blocked=blocked), meta
+    if ambulances:
+        meta["ambulances"] = [{"id": f"amb{i}", "origin": a["origin"], "dest": a["dest"], "start": a.get("start")}
+                              for i, a in enumerate(ambulances)]
+    meta["origin"], meta["dest"] = origin, dest
+    return Scenario(origin=origin, dest=dest, density="custom", rate=float(r), seed=seed, blocked=blocked,
+                    ambulances=amb_specs), meta
+
+
+def live_fields(run) -> dict:
+    """Extra response fields for a run started with live=true (empty for every other run)."""
+    lv = run.live
+    if lv is None:
+        return {}
+    return {"live_enabled": True, "modified_live": lv.modified, "clean_comparison": not lv.modified,
+            "live_events": list(lv.events), "ambulance_count": lv.amb_total}
 
 
 def clean(x):
@@ -140,9 +196,11 @@ def deltas_vs_a(results: dict) -> dict:
     return out
 
 
-def default_runner(s, strategy, label, cfg, on_step):
+def default_runner(s, strategy, label, cfg, on_step, live=None):
     from pegc_sumo.runner import run_scenario     # imported late: the API starts without SUMO
-    return run_scenario(s, strategy, label=label, cfg=cfg, on_step=on_step)
+    if live is None:
+        return run_scenario(s, strategy, label=label, cfg=cfg, on_step=on_step)
+    return run_scenario(s, strategy, label=label, cfg=cfg, on_step=on_step, live=live)
 
 
 @dataclass
@@ -160,13 +218,15 @@ class Run:
     log: list | None = None        # full decision log of a single run (sent with the WebSocket summary)
     done: threading.Event = field(default_factory=threading.Event)
     created: float = field(default_factory=time.time)
+    live: LiveControl | None = None   # Step 10: only for runs started with live=true
 
 
 class RunManager:
     """One worker thread, one run at a time (scenarios share one routes file). Strategies of a compare run one after another."""
 
     def __init__(self, runner=None, snapshot_interval: float = 0.125, max_queued: int = 20, max_kept: int = 200,
-                 max_snapshots: int = 3000, sim_interval: float | None = None):
+                 max_snapshots: int = 3000, sim_interval: float | None = None, live_speed: float | None = 4.0):
+        self.live_speed = live_speed              # Step 10: simulated seconds per wall second for live runs
         self.sim_interval = sim_interval          # None: sample by wall clock (old behaviour); else every N simulated seconds
         self.runner = runner or default_runner
         self.interval, self.max_queued, self.max_kept, self.max_snapshots = snapshot_interval, max_queued, max_kept, max_snapshots
@@ -177,7 +237,7 @@ class RunManager:
         self.c3 = load_c3()
         threading.Thread(target=self._worker, daemon=True).start()
 
-    def submit(self, kind: str, strategies: tuple, scenario: Scenario, meta: dict) -> Run:
+    def submit(self, kind: str, strategies: tuple, scenario: Scenario, meta: dict, live: bool = False) -> Run:
         with self.lock:
             if sum(1 for r in self.runs.values() if r.status in ("queued", "running")) >= self.max_queued:
                 raise Busy("too many runs waiting; try again later")
@@ -185,6 +245,8 @@ class RunManager:
             if "C3" in strategies:
                 run.meta["c3_weight"] = self.c3["weight"]
                 run.meta["c3_weight_source"] = self.c3["source"]
+            if live and kind == "run":
+                run.live = LiveControl(len(scenario.ambulances) or 1, self.live_speed)
             self.runs[run.id] = run
             for old in [r.id for r in sorted(self.runs.values(), key=lambda r: r.created)
                         if r.status in ("done", "error")][:max(0, len(self.runs) - self.max_kept)]:
@@ -242,19 +304,24 @@ class RunManager:
                 results = {}
                 for st in run.strategies:
                     cfg = replace(CONFIG, c3_wait_weight=self.c3["weight"]) if st == "C3" else CONFIG
-                    res = self.runner(run.scenario, st, f"api_{run.id}_{st}", cfg,
-                                      self._sampler(run) if run.kind == "run" else None)
+                    args = (run.scenario, st, f"api_{run.id}_{st}", cfg, self._sampler(run) if run.kind == "run" else None)
+                    res = self.runner(*args, live=run.live) if run.live is not None else self.runner(*args)
                     results[st] = summarize(res)
                     if run.kind == "run":
                         run.log = clean(getattr(res, "log", None))
                 if run.kind == "run":
                     run.summary = results[run.strategies[0]]
+                    if run.live is not None:
+                        run.summary.update(modified_live=run.live.modified, clean_comparison=not run.live.modified,
+                                           live_events=clean(list(run.live.events)))
                 else:
                     run.results = results
                 run.status = "done"
             except Exception as e:                       # noqa: BLE001 - report any failure to the client
                 run.error, run.status = f"{type(e).__name__}: {e}", "error"
             finally:
+                if run.live is not None:
+                    run.live.close()
                 with self.lock:
                     self.current = None
                 run.done.set()

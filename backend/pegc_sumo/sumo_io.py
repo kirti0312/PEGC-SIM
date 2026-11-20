@@ -43,15 +43,17 @@ def build_static_network(cfg: Config = CONFIG, out_dir: str | None = None) -> tu
     return net, path
 
 
-def build_scenario_files(net: Network, s: Scenario, cfg: Config = CONFIG, out_dir: str | None = None) -> dict:
-    """Write the routes file for one scenario. Returns paths and the generated demand."""
+def build_scenario_files(net: Network, s: Scenario, cfg: Config = CONFIG, out_dir: str | None = None,
+                         stream: bool = False) -> dict:
+    """Write the routes file for one scenario. Returns paths and the generated demand.
+    stream=True (Step 10 live runs): the file holds only the ambulances; the runner inserts the cars through TraCI."""
     cars, amb = generate_demand(net, s, cfg)
     ambs = generate_ambulances(net, s, cfg) if s.ambulances else ([amb] if amb else [])
-    key = f"{s.density}_{s.rate}_{s.seed}_{s.origin}_{s.dest}_{'+'.join(sorted(s.blocked)) or 'open'}_{len(ambs)}a"
+    key = f"{s.density}_{s.rate}_{s.seed}_{s.origin}_{s.dest}_{'+'.join(sorted(s.blocked)) or 'open'}_{len(ambs)}a" + ("_stream" if stream else "")
     out_dir = out_dir or os.path.join(BUILD_DIR, "scenarios")
     os.makedirs(out_dir, exist_ok=True)
     routes = os.path.join(out_dir, key + ".rou.xml")
-    write_routes(cars, ambs[0] if ambs else None, routes, cfg, extra_ambs=ambs[1:])
+    write_routes([] if stream else cars, ambs[0] if ambs else None, routes, cfg, extra_ambs=ambs[1:])
     digest = hashlib.sha1(open(routes, "rb").read()).hexdigest()
     return {"routes": routes, "cars": cars, "amb": ambs[0] if ambs else None, "ambs": ambs, "sha1": digest}
 

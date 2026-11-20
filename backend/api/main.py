@@ -11,9 +11,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import service as sv
+from pegc_sumo.live import LiveError
 from .service import ENGINE, InputError, RunManager
 
 NODE = Literal["W0", "E0", "W1", "E1", "N0", "S0", "N1", "S1", "N2", "S2"]
+
+
+class AmbulanceIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    origin: NODE
+    dest: NODE
+    start: float | None = Field(None, ge=0, le=300, description="seconds from the start of the run; default: after the warm-up")
+
+
+class TrafficChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    density: Literal["low", "medium", "high"] | None = None
+    rate: float | None = Field(None, ge=100, le=900, description="raw veh/h per entry (not calibrated)")
+
+
+class DispatchIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    origin: NODE
+    dest: NODE
 
 
 class RunRequest(BaseModel):
@@ -25,29 +45,31 @@ class RunRequest(BaseModel):
     rate: float | None = Field(None, ge=100, le=900, description="veh/h per entry; only for density=custom (raw, not calibrated)")
     seed: int = Field(7, strict=True)
     blocked: list[str] = Field(default_factory=list, max_length=10)
+    ambulances: list[AmbulanceIn] | None = Field(None, min_length=1, max_length=3, description="Step 10: 1 to 3 ambulances; overrides origin and dest")
+    live: bool = Field(False, description="Step 10: allow traffic changes and ambulance dispatch while the run is going (paced run)")
 
 
 def create_app(runner=None, calibration_path: str | None = None, snapshot_interval: float = 0.125,
-               c3_path: str | None = None, sim_interval: float | None = None) -> FastAPI:
+               c3_path: str | None = None, sim_interval: float | None = None, live_speed: float | None = 4.0) -> FastAPI:
     app = FastAPI(title="PEGC SUMO backend", version="step8")
     origins = [o for o in os.environ.get("PEGC_CORS_ORIGINS",
                "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173").split(",") if o]
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_origin_regex=r"https://.*\.app\.github\.dev",
                        allow_methods=["*"], allow_headers=["*"])
-    mgr = RunManager(runner, snapshot_interval, sim_interval=sim_interval)
+    mgr = RunManager(runner, snapshot_interval, sim_interval=sim_interval, live_speed=live_speed)
     if c3_path:
         mgr.c3 = sv.load_c3(c3_path)
     cal_path = calibration_path or sv.CALIBRATION_PATH
 
-    def prepare(origin, dest, density, rate, seed, blocked):
+    def prepare(origin, dest, density, rate, seed, blocked, ambulances=None):
         try:
-            return sv.resolve(origin, dest, density, rate, seed, blocked, sv.load_calibration(cal_path))
+            return sv.resolve(origin, dest, density, rate, seed, blocked, sv.load_calibration(cal_path), ambulances)
         except InputError as e:
             raise HTTPException(422, str(e))
 
-    def submit(kind, strategies, scenario, meta):
+    def submit(kind, strategies, scenario, meta, live=False):
         try:
-            return mgr.submit(kind, strategies, scenario, meta)
+            return mgr.submit(kind, strategies, scenario, meta, live)
         except sv.Busy as e:
             raise HTTPException(429, str(e))
 
@@ -66,16 +88,49 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
 
     @app.post("/api/runs", status_code=202)
     def start_run(req: RunRequest):
-        scenario, meta = prepare(req.origin, req.dest, req.density, req.rate, req.seed, req.blocked)
-        run = submit("run", (req.strategy,), scenario, {**meta, "strategy": req.strategy})
-        return {"id": run.id, "status": run.status, **run.meta}
+        ambs = [a.model_dump() for a in req.ambulances] if req.ambulances else None
+        scenario, meta = prepare(req.origin, req.dest, req.density, req.rate, req.seed, req.blocked, ambs)
+        run = submit("run", (req.strategy,), scenario, {**meta, "strategy": req.strategy}, req.live)
+        return {"id": run.id, "status": run.status, **run.meta, **sv.live_fields(run)}
+
+    def live_run(run_id: str):
+        run = mgr.get(run_id)
+        if run is None or run.kind != "run":
+            raise HTTPException(404, "unknown run id")
+        if run.live is None:
+            raise HTTPException(409, "this run was not started with live=true")
+        return run
+
+    @app.post("/api/runs/{run_id}/traffic")
+    def live_traffic(run_id: str, body: TrafficChange):
+        run = live_run(run_id)
+        try:
+            rate, dens = sv.traffic_rate(body.density, body.rate, sv.load_calibration(cal_path))
+            run.live.set_traffic(rate)
+        except InputError as e:
+            raise HTTPException(422, str(e))
+        except LiveError as e:
+            raise HTTPException(409, str(e))
+        return {"id": run.id, "accepted": True, "density": dens, "rate_per_entry_veh_h": rate, **sv.live_fields(run)}
+
+    @app.post("/api/runs/{run_id}/dispatch")
+    def live_dispatch(run_id: str, body: DispatchIn):
+        run = live_run(run_id)
+        try:
+            sv._check_amb_route(sv._net(), body.origin, body.dest, run.scenario.blocked)
+            aid = run.live.dispatch(body.origin, body.dest)
+        except InputError as e:
+            raise HTTPException(422, str(e))
+        except LiveError as e:
+            raise HTTPException(409, str(e))
+        return {"id": run.id, "accepted": True, "ambulance_id": aid, "origin": body.origin, "dest": body.dest, **sv.live_fields(run)}
 
     @app.get("/api/runs/{run_id}")
     def get_run(run_id: str, log: bool = Query(False, description="also return the full decision log")):
         run = mgr.get(run_id)
         if run is None or run.kind != "run":
             raise HTTPException(404, "unknown run id")
-        out = {"id": run.id, "status": run.status, **run.meta, "summary": run.summary, "error": run.error}
+        out = {"id": run.id, "status": run.status, **run.meta, "summary": run.summary, "error": run.error, **sv.live_fields(run)}
         if log:
             out["log"] = run.log or []
         return out
@@ -116,7 +171,7 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
                 await asyncio.sleep(0.05)
             if run.status == "done":
                 await ws.send_json({"type": "summary", "id": run.id, "status": "done", **run.meta, "summary": run.summary,
-                                    "log": run.log or []})
+                                    "log": run.log or [], **sv.live_fields(run)})
             else:
                 await ws.send_json({"type": "error", "engine": ENGINE, "id": run.id, "detail": run.error})
             await ws.close()
@@ -127,4 +182,5 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
 
 
 # the real server samples every 0.5 simulated seconds (about 840 frames per run), played out at ~8 frames per second
-app = create_app(sim_interval=float(os.environ.get("PEGC_SIM_INTERVAL", "0.5")))
+app = create_app(sim_interval=float(os.environ.get("PEGC_SIM_INTERVAL", "0.5")),
+                 live_speed=float(os.environ.get("PEGC_LIVE_SPEED", "4")))

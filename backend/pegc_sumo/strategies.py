@@ -24,6 +24,45 @@ def fixed_req(sig, cfg) -> Request:
     return Request(desired=want, emergency=False, baseline_desired=want)
 
 
+# Step 10: conflict rule used only when two or more ambulances want different axes at the same junction.
+CONFLICT_FACTOR = 2.0     # the later ambulance is served first only if it would lose more than this many times ...
+CONFLICT_MARGIN = 5.0     # ... the earlier one's loss, plus this many seconds ("far more")
+
+
+def pick_owner(ctx, cands):
+    """cands: [(amb_id, Upcoming)] for one junction. Returns (owner, conflict). conflict is None when all want the same
+    axis, else (other_cand, other_loss, owner_loss): the seconds the other ambulance loses by waiting, and the seconds
+    the owner would have lost had it been made to wait instead. Serve the earlier arrival unless the other ambulance
+    would lose far more time by waiting."""
+    cfg = ctx.cfg
+    cands = sorted(cands, key=lambda c: (c[1].eta, c[0]))
+    early = cands[0]
+    rival = next((c for c in cands[1:] if c[1].axis != early[1].axis), None)
+    if rival is None:
+        return early, None
+    for _, u in (early, rival):
+        if u.n_queue is None:
+            u.n_queue = ctx.queue_ahead(u) if ctx.queue_ahead is not None else 0
+    h, clear = cfg.c_discharge_headway, cfg.yellow + cfg.all_red
+    loss_rival = max(0.0, early[1].eta + early[1].n_queue * h + clear - rival[1].eta)    # rival waits for the earlier one
+    loss_early = max(0.0, rival[1].eta + rival[1].n_queue * h + clear - early[1].eta)    # earlier waits for the rival
+    if loss_rival > CONFLICT_FACTOR * loss_early + CONFLICT_MARGIN:
+        return rival, (early, loss_early, loss_rival)
+    return early, (rival, loss_rival, loss_early)
+
+
+def _conflict_text(jid, owner, other, loss_other, loss_owner) -> str:
+    """owner, other: (amb_id, Upcoming)."""
+    return (f"{jid}: {owner[0]} and {other[0]} need different axes; serving {owner[0]} ({owner[1].axis}-axis, ETA "
+            f"{js_fixed(owner[1].eta)} s) first. {other[0]} (ETA {js_fixed(other[1].eta)} s) would lose about "
+            f"{js_fixed(loss_other, 0)} s waiting, {owner[0]} would lose about {js_fixed(loss_owner, 0)} s the other way.")
+
+
+def multi_infos(ctx) -> list:
+    """[(amb_id, upcoming list or None)] for every ambulance the run knows about (only used when ctx.ambs is set)."""
+    return [(aid, tr.upcoming()) for aid, tr in ctx.ambs]
+
+
 class StrategyA:
     id = "A"
 
@@ -38,7 +77,45 @@ class StrategyB:
     request that junction's ambulance axis. Cross traffic is ignored; the safety layer still decides."""
     id = "B"
 
+    def __init__(self):
+        self._owner: dict = {}                  # Step 10: junction -> ambulance currently served (several ambulances only)
+
+    def _control_multi(self, ctx) -> None:
+        cfg = ctx.cfg
+        firsts = [(aid, info[0]) for aid, info in multi_infos(ctx) if info]
+        for jid, sig in ctx.bank.signals.items():
+            base = fixed_req(sig, cfg)
+            cands = [(aid, f) for aid, f in firsts if f.junction == jid and f.d_stop <= cfg.b_trigger_distance]
+            if cands:
+                (aid, first), conflict = pick_owner(ctx, cands)
+                prev = self._owner.get(jid)
+                if conflict is not None and prev != aid:          # logged once, when the decision is first made or changes
+                    ctx.log_event(jid, "conflict", _conflict_text(jid, (aid, first), *conflict))
+                self._owner[jid] = aid
+                if not sig.b_active:
+                    sig.b_active = True
+                    nq = first.n_queue
+                    if nq is None:
+                        nq = ctx.queue_ahead(first) if ctx.queue_ahead is not None else 0
+                    first.n_queue = nq
+                    ctx.log_tag = aid
+                    ctx.log_event(
+                        jid, "request",
+                        f"{jid}: ambulance {js_fixed(first.d_stop, 0)} m from the stop line, ETA {js_fixed(first.eta)} s, "
+                        f"queue ahead {nq} → requesting {first.axis}-axis green now (ignores cross traffic).",
+                        dStop=first.d_stop, eta=first.eta, nQueue=nq)
+                    ctx.log_tag = None
+                ctx.bank.request(jid, Request(desired=first.axis, emergency=True, baseline_desired=base.desired), ctx.t)
+            else:
+                self._owner.pop(jid, None)
+                if sig.b_active:
+                    sig.b_active = False
+                    ctx.log_event(jid, "release", f"{jid}: ambulance request released; back to the fixed plan.")
+                ctx.bank.request(jid, base, ctx.t)
+
     def control(self, ctx) -> None:
+        if ctx.ambs is not None and len(ctx.ambs) > 1:
+            return self._control_multi(ctx)
         cfg = ctx.cfg
         info = ctx.amb.upcoming() if ctx.amb is not None else None
         first = info[0] if info else None
@@ -266,6 +343,8 @@ class StrategyC:
         self.queue_aware = queue_aware
         self.recovery = recovery
         self._prev: list = []                   # junctions that were ahead of the ambulance in the previous step
+        self._prev_by: dict = {}                # Step 10: the same, per ambulance (several ambulances only)
+        self._owner: dict = {}                  # Step 10: junction -> ambulance currently served
 
     def _note_passes(self, ctx, info) -> None:
         """Same bookkeeping as Simulation._onAmbPass: a junction that is no longer ahead has been cleared."""
@@ -281,6 +360,8 @@ class StrategyC:
         self._prev = now
 
     def control(self, ctx) -> None:
+        if ctx.ambs is not None and len(ctx.ambs) > 1:
+            return self._control_multi(ctx)
         cfg = ctx.cfg
         info = ctx.amb.upcoming() if ctx.amb is not None else None
         self._note_passes(ctx, info)
@@ -292,6 +373,66 @@ class StrategyC:
                 req, predicted_pass, eta = evaluate(ctx, sig, u, extra, self.queue_aware, self.c3)
                 reqs[u.junction] = req
                 extra = max(0, predicted_pass - eta) + extra
+        self._apply(ctx, reqs)
+
+    def _note_passes_multi(self, ctx, infos) -> None:
+        """Per-ambulance version of _note_passes. A junction another ambulance still has ahead is not put into recovery."""
+        ahead = {aid: [u.junction for u in info] if info is not None else [] for aid, info in infos}
+        for aid, now in ahead.items():
+            for jid in self._prev_by.get(aid, []):
+                if jid in now:
+                    continue
+                sig = ctx.bank.signals[jid]
+                ctx.log_tag = aid
+                if any(jid in other for a2, other in ahead.items() if a2 != aid):
+                    sig.c_mode, sig.c_last_logged = "idle", ""         # next ambulance gets a fresh decision
+                    ctx.log_event(jid, "pass", f"Ambulance {aid} cleared {jid} at t = {js_fixed(ctx.t)} s.", at=ctx.t)
+                else:
+                    sig.amb_passed_at = ctx.t
+                    sig.c_mode = "passed"
+                    sig.c_recovering = True
+                    sig.b_active = False
+                    ctx.log_event(jid, "pass", f"Ambulance {aid} cleared {jid} at t = {js_fixed(ctx.t)} s.", at=ctx.t)
+                ctx.log_tag = None
+            self._prev_by[aid] = now
+
+    def _control_multi(self, ctx) -> None:
+        cfg = ctx.cfg
+        infos = multi_infos(ctx)
+        self._note_passes_multi(ctx, infos)
+        cands: dict = {}
+        for aid, info in infos:
+            for u in (info or [])[:cfg.c_lookahead_junctions]:
+                cands.setdefault(u.junction, []).append((aid, u))
+        owners = {}
+        for jid, lst in cands.items():
+            (aid, u), conflict = pick_owner(ctx, lst)
+            prev = self._owner.get(jid)
+            if prev is not None and prev != aid and any(c[0] == prev for c in lst):
+                sig = ctx.bank.signals[jid]
+                sig.c_mode, sig.c_last_logged = "idle", ""             # a displaced owner's sticky mode must not carry over
+            if conflict is not None and prev != aid:                   # logged once, when the decision is first made or changes
+                ctx.log_event(jid, "conflict", _conflict_text(jid, (aid, u), *conflict))
+            owners[jid] = aid
+        self._owner = dict(owners)
+        reqs = {}
+        for aid, info in infos:
+            if not info:
+                continue
+            extra = 0
+            for u in info[:cfg.c_lookahead_junctions]:
+                if owners.get(u.junction) != aid:
+                    continue
+                sig = ctx.bank.signals[u.junction]
+                ctx.log_tag = aid
+                req, predicted_pass, eta = evaluate(ctx, sig, u, extra, self.queue_aware, self.c3)
+                ctx.log_tag = None
+                reqs[u.junction] = req
+                extra = max(0, predicted_pass - eta) + extra
+        self._apply(ctx, reqs)
+
+    def _apply(self, ctx, reqs) -> None:
+        cfg = ctx.cfg
         for jid, sig in ctx.bank.signals.items():
             req = reqs.get(jid)
             if req is None:

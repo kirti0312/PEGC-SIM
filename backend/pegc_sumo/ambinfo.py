@@ -31,6 +31,16 @@ def eta_free(v: float, D: float, cfg: Config = CONFIG) -> float:
     return (vm - v0) / a + (D - da) / vm
 
 
+def free_flow_time(D: float, cfg: Config = CONFIG) -> float:
+    """Idealised unobstructed travel time over distance D (accelerate at amb_accel to amb_max_speed, then cruise).
+    Used only to express a multi-ambulance run's delay; it ignores curves and junction geometry."""
+    if D <= 0:
+        return 0.0
+    vm, a = cfg.amb_max_speed, cfg.amb_accel
+    da = vm * vm / (2 * a)
+    return math.sqrt(2 * D / a) if D <= da else vm / a + (D - da) / vm
+
+
 @dataclass
 class AmbState:
     """What SUMO reports about the ambulance at the end of a step."""
