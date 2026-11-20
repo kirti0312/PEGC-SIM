@@ -21,6 +21,7 @@ export const TrafficPicker = memo(function TrafficPicker({ value, onChange }) {
         ))}
       </div>
       {!custom && <div className="note" style={{ marginTop: 4 }}>{sumo ? `${value.density}: calibrated SUMO preset (the backend sets the rate; it is shown once a run starts)` : `${value.density}: ${CONFIG.density[value.density]} veh/h per entry point`}</div>}
+      {custom && sumo && <div className="note" style={{ marginTop: 4 }}>custom: raw rate, not calibrated; above about 240 per entry may saturate</div>}
       {custom && (
         <div className="rate-box">
           <input type="range" min={CONFIG.rateMin} max={CONFIG.rateMax} step={10} value={rate} onChange={(e) => setRate(e.target.value)} aria-label="Custom traffic rate, vehicles per hour per entry point" />

@@ -3,10 +3,15 @@ import { ctrl } from './ctrl.js';
 import { STRATEGIES, CONFIG, DENSITY_CHOICES, entryRate } from '../engine/config.js';
 import { SPEEDS } from './places.js';
 import { useRenderCount } from './hooks.js';
+import { useSource } from '../data/useSource.js';
+
+const LOCK_TIP = 'Set traffic in Configure before launching (live changes: browser mode only)';
 
 export const ControlBar = memo(function ControlBar({ snap, scenario, onStrategy, onLaunch }) {
   useRenderCount('ControlBar');
   const run = snap.mode === 'run';
+  const sumo = useSource().kind === 'sumo';
+  const locked = run && sumo; // SUMO runs take their traffic from Configure
   const density = snap.scenario.density;
   return (
     <div className="controlbar glass" role="toolbar" aria-label="Simulation controls">
@@ -29,10 +34,10 @@ export const ControlBar = memo(function ControlBar({ snap, scenario, onStrategy,
       <div className="cb-group">
         <span className="cb-lab">Traffic</span>
         {DENSITY_CHOICES.map((d) => (
-          <button key={d} className={`cb-btn ${density === d ? 'on' : ''}`} onClick={() => (d === 'custom' ? ctrl.setDensity('custom', entryRate(snap.scenario)) : ctrl.setDensity(d))}>{d}</button>
+          <button key={d} className={`cb-btn ${density === d ? 'on' : ''}`} disabled={locked} title={locked ? LOCK_TIP : undefined} aria-disabled={locked} onClick={() => (d === 'custom' ? ctrl.setDensity('custom', entryRate(snap.scenario)) : ctrl.setDensity(d))}>{d}</button>
         ))}
         {density === 'custom' && (
-          <input className="cb-rate" type="number" min={CONFIG.rateMin} max={CONFIG.rateMax} step={10} value={entryRate(snap.scenario)} aria-label="Custom traffic rate, vehicles per hour per entry point" title="Vehicles per hour per entry point"
+          <input className="cb-rate" type="number" min={CONFIG.rateMin} max={CONFIG.rateMax} step={10} value={entryRate(snap.scenario)} aria-label="Custom traffic rate, vehicles per hour per entry point" title={locked ? LOCK_TIP : 'Vehicles per hour per entry point'} disabled={locked}
             onChange={(e) => { const n = Math.round(Number(e.target.value)); if (Number.isFinite(n)) ctrl.setDensity('custom', Math.min(CONFIG.rateMax, Math.max(CONFIG.rateMin, n))); }} />
         )}
       </div>
