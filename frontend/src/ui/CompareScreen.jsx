@@ -5,6 +5,7 @@ import { subscribe, getState, runCompare, keyOf } from './compareStore.js';
 import { METRICS, STRAT_COLOR, cell, improvement, improvementText, valueText, summarise } from './compareLogic.js';
 import { BarChart, TradeoffChart } from './Charts.jsx';
 import { useRenderCount } from './hooks.js';
+import { useSource } from '../data/useSource.js';
 
 const SEED_OPTIONS = [5, 10, 20];
 const MK = Object.fromEntries(METRICS.map((m) => [m.key, m]));
@@ -12,6 +13,7 @@ const MK = Object.fromEntries(METRICS.map((m) => [m.key, m]));
 export const CompareScreen = memo(function CompareScreen({ scenario }) {
   useRenderCount('CompareScreen');
   const st = useSyncExternalStore(subscribe, getState);
+  const sumo = useSource().kind === 'sumo';
   const [traffic, setTraffic] = useState({ density: scenario.density, rate: scenario.rate });
   const [seedCount, setSeedCount] = useState(10);
   const [ablations, setAblations] = useState(false);
@@ -46,7 +48,7 @@ export const CompareScreen = memo(function CompareScreen({ scenario }) {
 
       {running && (
         <div className="glass card cmp-progress" role="status">
-          Running {strategies.length * seedCount} headless simulations in a background worker…
+          Running {strategies.length * seedCount} {sumo ? 'simulations on the SUMO backend, one at a time (each takes a few seconds)…' : 'headless simulations in a background worker…'}
           <div className="bar"><i style={{ width: `${Math.round((stale ? 0 : st.progress) * 100)}%` }} /></div>
         </div>
       )}
@@ -56,7 +58,7 @@ export const CompareScreen = memo(function CompareScreen({ scenario }) {
 
       <p className="note cmp-foot">
         Each strategy runs on the same {seedCount} consecutive seeds (starting at {scenario.seed}) so traffic is identical before the ambulance appears. Values are mean ± standard deviation. Improvement is measured against Strategy A, and a worse result is shown as worse.
-        Browser mini-simulator: not SUMO results. Simulated six-junction grid, simplified driver behaviour, no real-world validation.
+        {sumo ? 'SUMO backend results: real SUMO simulation of the same six-junction grid at the backend’s calibrated traffic levels (high traffic is oversaturated by design). Simplified network, no real-world validation.' : 'Browser mini-simulator: not SUMO results. Simulated six-junction grid, simplified driver behaviour, no real-world validation.'}
       </p>
     </div>
   );

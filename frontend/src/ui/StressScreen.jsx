@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { STRATEGIES, CONFIG, entryRate, trafficLabel } from '../engine/config.js';
 import { stressScenario, routeFor, routeLength, junctionsOn, pickRouteRoad, routeSegments, segLabelOf } from '../engine/stress.js';
+import { useSource } from '../data/useSource.js';
 import { subscribe, getState, setChoice, runStress, stressKey } from './stressStore.js';
 import { METRICS, STRAT_COLOR, cell, f1 } from './compareLogic.js';
 import { BarChart } from './Charts.jsx';
@@ -27,6 +28,7 @@ const wcls = (p) => (p === null || Math.abs(p) < 0.5 ? '' : p > 0 ? 'bad' : 'goo
 export const StressScreen = memo(function StressScreen({ scenario }) {
   useRenderCount('StressScreen');
   const st = useSyncExternalStore(subscribe, getState);
+  const sumo = useSource().kind === 'sumo';
   const choice = st.choice || { type: 'block', blocked: null, seedCount: 10 };
   // first visit: pre-select a road on the current route that still leaves another way through
   const picked = useMemo(() => pickRouteRoad(scenario), [scenario.origin, scenario.dest, scenario.blocked]);
@@ -102,7 +104,7 @@ export const StressScreen = memo(function StressScreen({ scenario }) {
       )}
 
       {running && (
-        <div className="glass card cmp-progress" role="status">Running headless simulations in a background worker…
+        <div className="glass card cmp-progress" role="status">Running {sumo ? 'simulations on the SUMO backend, one at a time (each takes a few seconds)…' : 'headless simulations in a background worker…'}
           <div className="bar"><i style={{ width: `${Math.round(st.progress * 100)}%` }} /></div>
         </div>
       )}
@@ -114,7 +116,7 @@ export const StressScreen = memo(function StressScreen({ scenario }) {
       )}
 
       <p className="note cmp-foot">
-        Browser mini-simulator: not SUMO results. Simulated six-junction grid, simplified driver behaviour, no real-world validation. Before and after use the same seeds; only the stress changes. Values are means over the seeds.
+        {sumo ? 'SUMO backend results: real SUMO simulation of the same six-junction grid at the backend’s calibrated traffic levels (high traffic is oversaturated by design). Simplified network, no real-world validation.' : 'Browser mini-simulator: not SUMO results. Simulated six-junction grid, simplified driver behaviour, no real-world validation.'} Before and after use the same seeds; only the stress changes. Values are means over the seeds.
       </p>
     </div>
   );

@@ -1,6 +1,8 @@
 // Runs the "before" and "after" comparisons for the Stress Test off the main thread and keeps the
 // last result and the user's choices, so leaving and returning to the screen loses nothing.
 import { runComparison } from '../engine/runner.js';
+import { isSumo, getSource } from '../data/source.js';
+import { runSumoComparison } from '../data/sumoCompare.js';
 
 let state = { status: 'idle', key: null, progress: 0, before: null, after: null, error: null, choice: null };
 const subs = new Set();
@@ -47,6 +49,10 @@ function getWorker() {
 }
 
 function compareOnce(scenario, strategies, seedCount, onProgress) {
+  if (isSumo()) {
+    const t = runToken;
+    return runSumoComparison(scenario, strategies, seedCount, (d, n) => onProgress(d / n), () => t !== runToken);
+  }
   const attempt = () =>
     new Promise((resolve, reject) => {
       const id = nextId++;
@@ -77,5 +83,5 @@ export async function runStress({ key, before, after, strategies, seedCount }) {
 }
 
 export function stressKey(before, after, strategies, seedCount) {
-  return JSON.stringify([before, after, strategies, seedCount]);
+  return JSON.stringify([before, after, strategies, seedCount, getSource().kind]);
 }

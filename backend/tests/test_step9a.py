@@ -98,6 +98,17 @@ def test_sampler_carries_log_of_skipped_steps_and_flags_frames():
     json.dumps(run.snapshots)
 
 
+def test_sampler_can_sample_by_simulated_time():
+    m = sv.RunManager(lambda *a: None, snapshot_interval=0.0, sim_interval=0.5)   # dt 0.25 -> every 2nd step
+    run = _run(m)
+    cb = m._sampler(run)
+    for k in range(10):
+        wanted = cb.frame_wanted()
+        cb({"t": k * 0.25, "log": [{"t": k * 0.25, "kind": "x"}], **({"veh": []} if wanted else {})})
+    assert [x["t"] for x in run.snapshots] == [0.0, 0.5, 1.0, 1.5, 2.0]
+    assert sum(len(x["log"]) for x in run.snapshots) == 9                         # entries of the last (unsampled) step wait
+
+
 def test_sampler_without_frame_support_still_samples_by_clock():
     m = _mgr(0.0)
     run = _run(m)
@@ -197,6 +208,26 @@ def test_websocket_stream_has_vehicles_signals_amb_and_log():
     assert snaps and snaps[0]["veh"][0]["edge"] == "W0>J00" and snaps[0]["amb"]["edge"] == "W0>J00"
     assert snaps[0]["signals"]["J00"]["timer"] == 2.0 and snaps[0]["log"][0]["kind"] == "request"
     assert msgs[-1]["type"] == "summary" and msgs[-1]["log"][0]["kind"] == "request" and msgs[-1]["engine"] == "SUMO"
+
+
+def test_get_run_returns_log_only_when_asked():
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    from api.main import create_app
+
+    def runner(s, strategy, label, cfg, on_step):
+        return SimpleNamespace(strategy=strategy, metrics={"violations": 0}, safety={}, switches=0, wall_seconds=0.0,
+                               routes_sha1="x", log=[{"t": 2.0, "kind": "pass", "text": "p", "data": {}}])
+    c = TestClient(create_app(runner))
+    rid = c.post("/api/runs", json={"strategy": "C", "density": "low"}).json()["id"]
+    for _ in range(100):
+        d = c.get(f"/api/runs/{rid}").json()
+        if d["status"] == "done":
+            break
+        time.sleep(0.05)
+    assert "log" not in d
+    assert c.get(f"/api/runs/{rid}?log=1").json()["log"][0]["kind"] == "pass"
 
 
 # ------------------------------------------------------------------ SUMO (skips without SUMO)

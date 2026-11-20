@@ -6,6 +6,8 @@ import { CONFIG, defaultScenario } from '../engine/config.js';
 import { routeNodeIds } from '../engine/network.js';
 import { previewRoute } from '../engine/runner.js';
 import { Renderer } from './renderer.js';
+import { isSumo } from '../data/source.js';
+import { RemoteSim } from '../data/sumoSim.js';
 
 const SNAP_INTERVAL = 200; // ms (5 Hz)
 const MAX_STEPS_PER_FRAME = 48;
@@ -80,6 +82,7 @@ export class SimController {
 
   // ---------- simulation setup ----------
   startAmbient(density = 'medium', seed = 11) {
+    if (this.sim && this.sim.dispose) this.sim.dispose();
     this.mode = 'ambient';
     this.sim = new Simulation({ ...defaultScenario(), density, seed }, 'A', { ambient: true });
     this.playing = true;
@@ -95,13 +98,16 @@ export class SimController {
   loadRun(scenario, { autoplay = true } = {}) {
     this.mode = 'run';
     this.scenario = { ...scenario, blocked: [...(scenario.blocked || [])] };
-    this.sim = new Simulation(this.scenario, this.scenario.strategy);
+    if (this.sim && this.sim.dispose) this.sim.dispose();
+    // SUMO source: the same renderer, fed by the backend stream instead of the browser engine
+    this.sim = isSumo() ? new RemoteSim(this.scenario) : new Simulation(this.scenario, this.scenario.strategy);
     this.playing = autoplay;
     this.acc = 0;
     this.alpha = 1;
     this.densityChanged = false;
     this.dirty = true;
     this.emit(true);
+    if (this.sim.remote && this.sim.ambRoute) this.sim.start();
   }
 
   restart() {
@@ -305,7 +311,12 @@ export class SimController {
     const dt = CONFIG.dt;
     let steps = 0;
     const running = this.playing && !sim.finished;
-    if (running) {
+    if (sim.remote) {
+      sim.advance(now, this.playing, this.speed);
+      this.alpha = sim.alphaAt(now);
+      if ((sim.finished || sim.error) && this.playing) this.playing = false;
+      if (sim.consumeDirty()) this.dirty = true;
+    } else if (running) {
       this.acc += dtReal * this.speed;
       while (this.acc >= dt && steps < MAX_STEPS_PER_FRAME && !sim.finished) {
         sim.step();

@@ -28,13 +28,13 @@ class RunRequest(BaseModel):
 
 
 def create_app(runner=None, calibration_path: str | None = None, snapshot_interval: float = 0.125,
-               c3_path: str | None = None) -> FastAPI:
+               c3_path: str | None = None, sim_interval: float | None = None) -> FastAPI:
     app = FastAPI(title="PEGC SUMO backend", version="step8")
     origins = [o for o in os.environ.get("PEGC_CORS_ORIGINS",
                "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173").split(",") if o]
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_origin_regex=r"https://.*\.app\.github\.dev",
                        allow_methods=["*"], allow_headers=["*"])
-    mgr = RunManager(runner, snapshot_interval)
+    mgr = RunManager(runner, snapshot_interval, sim_interval=sim_interval)
     if c3_path:
         mgr.c3 = sv.load_c3(c3_path)
     cal_path = calibration_path or sv.CALIBRATION_PATH
@@ -71,11 +71,14 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
         return {"id": run.id, "status": run.status, **run.meta}
 
     @app.get("/api/runs/{run_id}")
-    def get_run(run_id: str):
+    def get_run(run_id: str, log: bool = Query(False, description="also return the full decision log")):
         run = mgr.get(run_id)
         if run is None or run.kind != "run":
             raise HTTPException(404, "unknown run id")
-        return {"id": run.id, "status": run.status, **run.meta, "summary": run.summary, "error": run.error}
+        out = {"id": run.id, "status": run.status, **run.meta, "summary": run.summary, "error": run.error}
+        if log:
+            out["log"] = run.log or []
+        return out
 
     @app.get("/api/compare")
     def compare(origin: NODE = "W0", dest: NODE = "E1", density: Literal["low", "medium", "high", "custom"] = "medium",
@@ -123,4 +126,5 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
     return app
 
 
-app = create_app()
+# the real server samples every 0.5 simulated seconds (about 840 frames per run), played out at ~8 frames per second
+app = create_app(sim_interval=float(os.environ.get("PEGC_SIM_INTERVAL", "0.5")))

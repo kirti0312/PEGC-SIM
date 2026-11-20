@@ -3,6 +3,7 @@ import { ctrl } from './ui/ctrl.js';
 import { useSnapshot, useRenderCount } from './ui/hooks.js';
 import { defaultScenario } from './engine/config.js';
 import { TopBar } from './ui/TopBar.jsx';
+import { BackendBanner } from './ui/BackendBanner.jsx';
 import { LegendPanel } from './ui/LegendPanel.jsx';
 import { AnalyticsPanel } from './ui/AnalyticsPanel.jsx';
 import { ControlBar } from './ui/ControlBar.jsx';
@@ -107,6 +108,7 @@ export default function App() {
     <div className="app">
       <canvas ref={canvasRef} className="scene" aria-label="City traffic simulation view" />
       <TopBar screen={screen} onNav={nav} snap={snap} scenario={scenario} onHelp={openWelcome} />
+      <BackendBanner message={snap.backendError} />
       {screen === 'command' && <CommandCentre snap={snap} onLaunch={launch} onNav={nav} />}
       {screen === 'configure' && <ConfigureScreen scenario={scenario} setScenario={setScenario} onLaunch={launch} />}
       {screen === 'watch' && (

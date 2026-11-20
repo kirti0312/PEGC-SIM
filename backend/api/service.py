@@ -166,7 +166,8 @@ class RunManager:
     """One worker thread, one run at a time (scenarios share one routes file). Strategies of a compare run one after another."""
 
     def __init__(self, runner=None, snapshot_interval: float = 0.125, max_queued: int = 20, max_kept: int = 200,
-                 max_snapshots: int = 3000):
+                 max_snapshots: int = 3000, sim_interval: float | None = None):
+        self.sim_interval = sim_interval          # None: sample by wall clock (old behaviour); else every N simulated seconds
         self.runner = runner or default_runner
         self.interval, self.max_queued, self.max_kept, self.max_snapshots = snapshot_interval, max_queued, max_kept, max_snapshots
         self.runs: dict = {}
@@ -202,9 +203,11 @@ class RunManager:
     def _sampler(self, run: Run):
         """on_step callback. Wall-clock sampling; log entries of skipped steps are carried into the next kept snapshot.
         `frame_wanted` tells a runner that supports per-vehicle frames when to build one (Step 9a)."""
-        st = {"last": None, "armed": False, "frames": False, "pending": []}
+        st = {"last": None, "armed": False, "frames": False, "pending": [], "steps": 0, "last_step": None}
 
         def due() -> bool:
+            if self.sim_interval is not None:             # simulated-time sampling: smooth playback however fast SUMO runs
+                return st["last_step"] is None or (st["steps"] + 1 - st["last_step"]) * CONFIG.dt >= self.sim_interval - 1e-9
             return st["last"] is None or time.monotonic() - st["last"] >= self.interval
 
         def frame_wanted() -> bool:
@@ -213,12 +216,14 @@ class RunManager:
             return st["armed"]
 
         def on_step(snap):
+            st["steps"] += 1
             st["pending"].extend(snap.get("log") or [])
             keep = st["armed"] if st["frames"] else due()
             st["armed"] = False
             if not keep:
                 return
             st["last"] = time.monotonic()
+            st["last_step"] = st["steps"]
             if len(run.snapshots) < self.max_snapshots:
                 out = {k: v for k, v in snap.items() if k != "log"}
                 out["log"], st["pending"] = st["pending"], []

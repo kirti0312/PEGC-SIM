@@ -1,10 +1,12 @@
 import { memo } from 'react';
 import { CONFIG, DENSITY_CHOICES, entryRate } from '../engine/config.js';
 import { ENTRY_COUNT } from './places.js';
+import { useSource } from '../data/useSource.js';
 
 // Low / Medium / High presets plus a Custom rate (vehicles per hour per entry point).
 // value: { density, rate }. onChange({ density, rate }).
 export const TrafficPicker = memo(function TrafficPicker({ value, onChange }) {
+  const sumo = useSource().kind === 'sumo';
   const custom = value.density === 'custom';
   const rate = entryRate(value);
   const setRate = (r) => {
@@ -18,7 +20,7 @@ export const TrafficPicker = memo(function TrafficPicker({ value, onChange }) {
           <button key={d} className={value.density === d ? 'on' : ''} onClick={() => onChange(d === 'custom' ? { density: 'custom', rate } : { density: d, rate: value.rate })}>{d}</button>
         ))}
       </div>
-      {!custom && <div className="note" style={{ marginTop: 4 }}>{value.density}: {CONFIG.density[value.density]} veh/h per entry point</div>}
+      {!custom && <div className="note" style={{ marginTop: 4 }}>{sumo ? `${value.density}: calibrated SUMO preset (the backend sets the rate; it is shown once a run starts)` : `${value.density}: ${CONFIG.density[value.density]} veh/h per entry point`}</div>}
       {custom && (
         <div className="rate-box">
           <input type="range" min={CONFIG.rateMin} max={CONFIG.rateMax} step={10} value={rate} onChange={(e) => setRate(e.target.value)} aria-label="Custom traffic rate, vehicles per hour per entry point" />

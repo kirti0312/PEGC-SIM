@@ -2,6 +2,8 @@
 // leaving and re-opening the Compare screen does not lose it. Falls back to the main thread.
 import { runComparison } from '../engine/runner.js';
 import { entryRate } from '../engine/config.js';
+import { isSumo, getSource } from '../data/source.js';
+import { runSumoComparison } from '../data/sumoCompare.js';
 
 let state = { status: 'idle', key: null, progress: 0, out: null, error: null };
 const subs = new Set();
@@ -19,7 +21,7 @@ export const subscribe = (f) => {
 export const getState = () => state;
 
 export function keyOf(scenario, strategies, seedCount) {
-  return JSON.stringify([scenario.origin, scenario.dest, scenario.density, entryRate(scenario), [...scenario.blocked].sort(), scenario.seed, seedCount, strategies]);
+  return JSON.stringify([scenario.origin, scenario.dest, scenario.density, entryRate(scenario), [...scenario.blocked].sort(), scenario.seed, seedCount, strategies, getSource().kind]);
 }
 
 function fallback(id, scenario, strategies, seedCount) {
@@ -38,6 +40,13 @@ export function runCompare(scenario, strategies, seedCount) {
   const id = ++reqId;
   const sc = { ...scenario, blocked: [...scenario.blocked] };
   set({ status: 'running', key: keyOf(sc, strategies, seedCount), progress: 0, out: null, error: null });
+  if (isSumo()) {
+    // SUMO source: results come from the backend (calibrated presets), one run at a time
+    runSumoComparison(sc, strategies, seedCount, (d, t) => id === reqId && set({ progress: d / t }), () => id !== reqId)
+      .then((out) => id === reqId && set({ status: 'done', out, progress: 1 }))
+      .catch((e) => id === reqId && set({ status: 'error', error: String(e.message || e) }));
+    return;
+  }
   try {
     if (!worker) {
       worker = new Worker(new URL('../engine/worker.js', import.meta.url), { type: 'module' });
