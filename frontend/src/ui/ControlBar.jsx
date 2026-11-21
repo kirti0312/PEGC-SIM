@@ -1,17 +1,39 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { ctrl } from './ctrl.js';
 import { STRATEGIES, CONFIG, DENSITY_CHOICES, entryRate } from '../engine/config.js';
-import { SPEEDS } from './places.js';
-import { useRenderCount } from './hooks.js';
+import { SPEEDS, BOUNDARY_IDS, placeLabel } from './places.js';
 import { useSource } from '../data/useSource.js';
+import { MAX_AMBS } from '../data/ambColors.js';
+import { useRenderCount } from './hooks.js';
 
-const LOCK_TIP = 'Set traffic in Configure before launching (live changes: browser mode only)';
+// Step 10b, SUMO mode only: send another ambulance into the running simulation.
+function DispatchGroup({ snap, scenario }) {
+  const [origin, setOrigin] = useState(scenario.origin);
+  const [dest, setDest] = useState(scenario.dest);
+  const ok = snap.canDispatch && origin !== dest;
+  return (
+    <div className="cb-group">
+      <span className="cb-lab">Live</span>
+      <select className="cb-select" value={origin} onChange={(e) => setOrigin(e.target.value)} aria-label="Dispatch origin">
+        {BOUNDARY_IDS.map((id) => (<option key={id} value={id}>{placeLabel(id)}</option>))}
+      </select>
+      <span className="cb-lab">→</span>
+      <select className="cb-select" value={dest} onChange={(e) => setDest(e.target.value)} aria-label="Dispatch destination">
+        {BOUNDARY_IDS.map((id) => (<option key={id} value={id}>{placeLabel(id)}</option>))}
+      </select>
+      <button className="cb-btn" disabled={!ok} onClick={() => ctrl.dispatchAmbulance(origin, dest)}
+        title={snap.ambCount >= MAX_AMBS ? 'At most 3 ambulances per run' : origin === dest ? 'Origin and destination must differ' : 'Send another ambulance now. The run is then marked as changed live and is not used in clean comparisons.'}>
+        Dispatch ambulance now ({snap.ambCount}/{MAX_AMBS})
+      </button>
+      {snap.liveError && <span className="cb-hint" style={{ color: 'var(--bad)' }}>{snap.liveError}</span>}
+    </div>
+  );
+}
 
 export const ControlBar = memo(function ControlBar({ snap, scenario, onStrategy, onLaunch }) {
   useRenderCount('ControlBar');
   const run = snap.mode === 'run';
-  const sumo = useSource().kind === 'sumo';
-  const locked = run && sumo; // SUMO runs take their traffic from Configure
+  const sumoLive = useSource().kind === 'sumo' && run && snap.canLive !== undefined;
   const density = snap.scenario.density;
   return (
     <div className="controlbar glass" role="toolbar" aria-label="Simulation controls">
@@ -34,13 +56,14 @@ export const ControlBar = memo(function ControlBar({ snap, scenario, onStrategy,
       <div className="cb-group">
         <span className="cb-lab">Traffic</span>
         {DENSITY_CHOICES.map((d) => (
-          <button key={d} className={`cb-btn ${density === d ? 'on' : ''}`} disabled={locked} title={locked ? LOCK_TIP : undefined} aria-disabled={locked} onClick={() => (d === 'custom' ? ctrl.setDensity('custom', entryRate(snap.scenario)) : ctrl.setDensity(d))}>{d}</button>
+          <button key={d} className={`cb-btn ${density === d ? 'on' : ''}`} onClick={() => (d === 'custom' ? ctrl.setDensity('custom', entryRate(snap.scenario)) : ctrl.setDensity(d))}>{d}</button>
         ))}
         {density === 'custom' && (
-          <input className="cb-rate" type="number" min={CONFIG.rateMin} max={CONFIG.rateMax} step={10} value={entryRate(snap.scenario)} aria-label="Custom traffic rate, vehicles per hour per entry point" title={locked ? LOCK_TIP : 'Vehicles per hour per entry point'} disabled={locked}
+          <input className="cb-rate" type="number" min={CONFIG.rateMin} max={CONFIG.rateMax} step={10} value={entryRate(snap.scenario)} aria-label="Custom traffic rate, vehicles per hour per entry point" title="Vehicles per hour per entry point"
             onChange={(e) => { const n = Math.round(Number(e.target.value)); if (Number.isFinite(n)) ctrl.setDensity('custom', Math.min(CONFIG.rateMax, Math.max(CONFIG.rateMin, n))); }} />
         )}
       </div>
+      {sumoLive && <DispatchGroup snap={snap} scenario={scenario} />}
       <div className="cb-group">
         <span className="cb-lab">Strategy</span>
         <select className="cb-select" value={scenario.strategy} onChange={(e) => onStrategy(e.target.value)} aria-label="Strategy">

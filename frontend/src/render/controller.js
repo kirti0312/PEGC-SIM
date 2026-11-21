@@ -137,13 +137,21 @@ export class SimController {
   }
   setDensity(d, rate) {
     if (!this.sim) return;
-    this.sim.setDensity(d, rate);
-    if (this.mode === 'run') {
+    const changed = this.sim.setDensity(d, rate);
+    if (this.mode === 'run' && changed !== false) {
       this.scenario = { ...this.scenario, density: d, ...(rate !== undefined ? { rate } : {}) };
       this.densityChanged = true;
     }
     this.dirty = true;
     this.emit(true);
+  }
+  // Step 10b (SUMO only): send another ambulance into the running simulation.
+  dispatchAmbulance(origin, dest) {
+    if (!this.sim || !this.sim.remote || !this.sim.dispatch) return;
+    this.sim.dispatch(origin, dest).then(() => {
+      this.dirty = true;
+      this.emit(true);
+    });
   }
   setView(v) {
     this.view = v;

@@ -7,7 +7,8 @@ import { CONFIG } from '../engine/config.js';
 import { buildNetwork, findRoute } from '../engine/network.js';
 import { makeSignal } from '../engine/signals.js';
 import { setPose } from '../engine/vehicles.js';
-import { startRun, openStream, BackendError } from './sumoApi.js';
+import { startRun, openStream, BackendError, scenarioAmbulances, setLiveTraffic, dispatchAmbulance } from './sumoApi.js';
+import { ambColor, MAX_AMBS } from './ambColors.js';
 import { normaliseMetrics } from './sumoCompare.js';
 
 const BASE_PERIOD = 125; // ms between frames at 4x, the backend's own pace
@@ -48,6 +49,14 @@ export class RemoteSim {
     this.ambSeen = false;
     this.ambDone = false;
     this.closeStream = null;
+    // Step 10b: several ambulances and live changes (SUMO only)
+    this.ambPlan = scenarioAmbulances(this.scenario);        // null = the ordinary single ambulance
+    this.ambCountTotal = this.ambPlan ? this.ambPlan.length : 1;
+    this.ambs = new Map();                                    // id -> vehicle object, kept after the ambulance has left
+    this.ambTints = null;                                     // id -> colour, only when there are 2 or more ambulances
+    this.runId = null;
+    this.modifiedLive = false;
+    this.liveError = null;
     this.stale = true;
     this._dirty = true;
   }
@@ -55,8 +64,10 @@ export class RemoteSim {
   // ----- lifecycle
   async start() {
     try {
-      const r = await startRun(this.scenario, this.strategyId);
+      const r = await startRun(this.scenario, this.strategyId, { live: true, ambulances: this.ambPlan });
       this.info = r;
+      this.runId = r.id;
+      this._dirty = true;
       if (this.closed) return;
       this.closeStream = openStream(r.id, {
         message: (m) => this.onMessage(m),
@@ -146,7 +157,7 @@ export class RemoteSim {
         o.ph = o.h;
       }
       if (o.kind === 'amb') {
-        this.amb = o;
+        this.ambs.set(o.id, o);
         this.ambSeen = true;
       }
     }
@@ -159,18 +170,63 @@ export class RemoteSim {
           if (o.kind === 'amb') {
             o.inNet = false;
             o.done = true;
-            this.ambDone = true;
           }
         }
       }
       this.live.length = w;
     }
+    this.updateAmbs();
     for (const e of m.log || []) {
-      this.logEntries.push({ id: ++this.logTotal, t: e.t, kind: e.kind, text: e.text });
+      this.logEntries.push({ id: ++this.logTotal, t: e.t, kind: e.kind, text: e.text, amb: this.logAmb(e) });
       if (this.logEntries.length > LOG_CAP) this.logEntries.shift();
     }
     this.series.push([m.t, m.queued]);
     if (this.series.length > 400) this.series.shift();
+  }
+
+  // The ambulance the camera and the single-ambulance panels follow: ambulance 1 while it drives, then the next one on the road.
+  // With one ambulance this is exactly the old behaviour.
+  updateAmbs() {
+    const list = [...this.ambs.values()];
+    const active = list.filter((a) => a.inNet && !a.done);
+    this.amb = list.find((a) => a.id === 'amb0' && active.includes(a)) || active[0] || list.find((a) => a.id === 'amb0') || list[list.length - 1] || null;
+    this.ambDone = list.length > 0 && list.length >= this.ambCountTotal && list.every((a) => a.done);
+    if (this.ambCountTotal > 1) {
+      const t = {};
+      for (const a of list) t[a.id] = ambColor(a.id);
+      this.ambTints = t;
+    }
+  }
+
+  // Which ambulance a log line belongs to: the backend tags most lines; amb0's own enter/arrive/pass lines are untagged.
+  logAmb(e) {
+    const d = e.data && e.data.amb;
+    if (d) return d;
+    const m = /^\[(amb\d)\]/.exec(e.text || '');
+    if (m) return m[1];
+    if (this.ambCountTotal > 1 && (e.kind === 'enter' || e.kind === 'arrive' || e.kind === 'pass') && !/amb\d/.test(e.text || '')) return 'amb0';
+    return null;
+  }
+
+  // ----- live changes (the run must be going; the backend applies them at its current simulated time)
+  get canLive() {
+    return !!(this.runId && !this.finished && !this.error && !this.summary);
+  }
+  get canDispatch() {
+    return this.canLive && this.ambCountTotal < MAX_AMBS;
+  }
+  async dispatch(origin, dest) {
+    if (!this.canDispatch) return false;
+    try {
+      const r = await dispatchAmbulance(this.runId, origin, dest);
+      this.ambCountTotal = Math.max(this.ambCountTotal, (r.ambulance_count || this.ambCountTotal + 1));
+      this.modifiedLive = true;
+      this.liveError = null;
+    } catch (e) {
+      this.liveError = e instanceof BackendError ? e.message : String((e && e.message) || e);
+    }
+    this._dirty = true;
+    return true;
   }
 
   complete() {
@@ -182,8 +238,23 @@ export class RemoteSim {
     this._dirty = true;
   }
 
-  setDensity() {
-    /* live traffic changes during a SUMO run are Step 10 */
+  // Live traffic change. Returns false when nothing was changed (same setting, or the run is not live), so the
+  // controller does not mark the run as modified for nothing.
+  setDensity(d, rate) {
+    const cur = this.scenario;
+    if (!this.canLive || (d === cur.density && (d !== 'custom' || Math.round(Number(rate)) === Math.round(Number(cur.rate))))) return false;
+    this.scenario = { ...cur, density: d, ...(rate !== undefined ? { rate } : {}) };
+    this.modifiedLive = true;
+    setLiveTraffic(this.runId, d === 'custom' ? { rate: Math.round(Number(rate)) } : { density: d })
+      .then(() => {
+        this.liveError = null;
+        this._dirty = true;
+      })
+      .catch((e) => {
+        this.liveError = e instanceof BackendError ? e.message : String((e && e.message) || e);
+        this._dirty = true;
+      });
+    return true;
   }
 
   snapshot() {
@@ -218,6 +289,13 @@ export class RemoteSim {
         trafficNote: info.traffic_note || null,
       },
       backendError: this.error ? this.error.message : null,
+      // Step 10b (added fields): present in every SUMO snapshot, used only by the SUMO controls
+      ambs: [...this.ambs.values()].map((a) => ({ id: a.id, color: ambColor(a.id), active: a.inNet && !a.done, done: a.done })),
+      ambCount: this.ambCountTotal,
+      canDispatch: this.canDispatch,
+      canLive: this.canLive,
+      modifiedLive: this.modifiedLive,
+      liveError: this.liveError,
     };
   }
 }

@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { ctrl } from './ctrl.js';
 import { useRenderCount } from './hooks.js';
+import { ambColor, ambLabel } from '../data/ambColors.js';
 
 const MAX_SHOWN = 60;
 
@@ -25,7 +26,7 @@ export const DecisionLog = memo(function DecisionLog({ total, strategy, open, on
         <div className="log-list">
           {items.map((e) => (
             <div key={e.id} className={`log-item ${e.kind}`}>
-              <span className="t">{e.t.toFixed(1)}s</span>{e.text}
+              <span className="t">{e.t.toFixed(1)}s</span>{e.amb && <span className="amb-dot sm" style={{ background: ambColor(e.amb) }} title={ambLabel(e.amb)} />}{e.text}
             </div>
           ))}
         </div>

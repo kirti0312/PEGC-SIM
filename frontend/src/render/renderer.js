@@ -309,6 +309,7 @@ export class Renderer {
     }
     ctx.restore();
     if (amb) this.drawAmbGlowAndTrail(ctx, amb, time, reduced);
+    if (sim.ambTints) this.drawAmbRings(ctx, live, sim.ambTints);       // Step 10b: only when a SUMO run has 2 or more ambulances
 
     // ---- depth-sorted dynamic items -----------------------------------------------------
     for (let i = 0; i < items.length; i++) {
@@ -399,6 +400,27 @@ export class Renderer {
       ctx.arc(n.x, n.y, 4.2, 0, TAU);
       ctx.fill();
     }
+  }
+
+  // Step 10b: a coloured ring under every ambulance so several of them can be told apart (SUMO runs with 2+ ambulances only).
+  drawAmbRings(ctx, live, tints) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 0.9;
+    for (let i = 0; i < live.length; i++) {
+      const v = live[i];
+      const c = v.kind === 'amb' && tints[v.id];
+      if (!c) continue;
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.arc(v.rx, v.ry, 3.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = c;
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   drawAmbGlowAndTrail(ctx, amb, time, reduced) {

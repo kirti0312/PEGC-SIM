@@ -158,5 +158,131 @@ await t('normaliseMetrics keeps finished times', () => {
   ok(normaliseMetrics({ ambFinished: true, ambTravelTime: 90 }).ambTravelTime === 90);
 });
 
+// ---------------- Step 10b: several ambulances and live changes (SUMO only) ----------------
+const { scenarioAmbulances } = await import('../sumoApi.js');
+const flush = () => new Promise((r) => setTimeout(r, 0));
+const amb = (id, edge, s, extra = {}) => ({ ...car(id, edge, s), kind: 'amb', len: 6.5, ...extra });
+
+await t('10b: a scenario without the new fields sends exactly the old request body', () => {
+  ok(scenarioAmbulances(sc) === null);
+  const b = runBody(sc, 'C');
+  ok(!('ambulances' in b) && !('live' in b));
+  ok(JSON.stringify(Object.keys(runBody(sc, 'C', {})).sort()) === JSON.stringify(Object.keys(b).sort()));
+});
+
+await t('10b: ambulance list and live flag are sent only when asked for', () => {
+  const two = { ...sc, ambStart: '', extraAmbs: [{ origin: 'N0', dest: 'S0', start: 70 }] };
+  const l = scenarioAmbulances(two);
+  ok(l.length === 2 && l[0].origin === 'W0' && l[0].start === null && l[1].start === 70);
+  const b = runBody(two, 'C', { ambulances: l, live: true });
+  ok(b.live === true && b.ambulances.length === 2 && !('start' in b.ambulances[0]) && b.ambulances[1].start === 70);
+  ok(!('ambulances' in runBody(two, 'C')), 'Compare and Stress never pass opts, so they stay single-ambulance');
+  ok(scenarioAmbulances({ ...sc, ambStart: 90 })[0].start === 90 && scenarioAmbulances({ ...sc, ambStart: 90 }).length === 1);
+});
+
+await t('10b: RemoteSim with one ambulance keeps the old behaviour (no tints, no rows)', () => {
+  const s = new RemoteSim(sc);
+  s.apply(frame(1, [amb('amb0', 'J00>J01', 0, { prev: 'W0>J00' })]));
+  ok(s.ambTints === null && s.amb.id === 'amb0');
+  s.apply(frame(2, []));
+  ok(s.ambDone && s.snapshot().ambCount === 1);
+});
+
+await t('10b: three ambulances get colours, the camera follows the first one that is driving, done only when all are', () => {
+  const s = new RemoteSim({ ...sc, extraAmbs: [{ origin: 'N0', dest: 'S0', start: 70 }, { origin: 'S1', dest: 'N1', start: 80 }] });
+  ok(s.ambCountTotal === 3);
+  s.apply(frame(1, [amb('amb0', 'J00>J01', 0), amb('amb1', 'N0>J00', 5), amb('amb2', 'S1>J11', 1)]));
+  ok(s.ambTints && Object.keys(s.ambTints).length === 3 && new Set(Object.values(s.ambTints)).size === 3, 'three different colours');
+  ok(s.amb.id === 'amb0');
+  s.apply(frame(1.5, [amb('amb0', 'J00>J01', 9), amb('amb1', 'N0>J00', 9)]));
+  s.apply(frame(2, [amb('amb1', 'N0>J00', 60)]));
+  ok(s.amb.id === 'amb1' && !s.ambDone, 'amb0 and amb2 left, amb1 still driving');
+  s.apply(frame(5, []));
+  ok(s.ambDone, 'all three have left');
+  const sn = s.snapshot();
+  ok(sn.ambs.length === 3 && sn.ambs.every((a) => a.done) && sn.ambCount === 3);
+});
+
+await t('10b: log lines carry the ambulance tag (backend tag, text prefix, or amb0 enter/arrive in a multi run)', () => {
+  const s = new RemoteSim({ ...sc, extraAmbs: [{ origin: 'N0', dest: 'S0', start: 70 }] });
+  s.apply(frame(1, [], { log: [
+    { t: 1, kind: 'request', text: '[amb1] J00: x', data: { amb: 'amb1' } },
+    { t: 1, kind: 'request', text: '[amb1] J01: y' },
+    { t: 1, kind: 'enter', text: 'Ambulance entered the network at t = 60.0 s.' },
+    { t: 1, kind: 'enter', text: 'Ambulance amb1 entered the network at t = 70.0 s.', data: { amb: 'amb1' } },
+    { t: 1, kind: 'switch', text: 'J00 signal change' },
+  ] }));
+  const tags = s.logEntries.map((e) => e.amb);
+  ok(JSON.stringify(tags) === JSON.stringify(['amb1', 'amb1', 'amb0', 'amb1', null]), JSON.stringify(tags));
+  const one = new RemoteSim(sc);
+  one.apply(frame(1, [], { log: [{ t: 1, kind: 'enter', text: 'Ambulance entered the network at t = 60.0 s.' }] }));
+  ok(one.logEntries[0].amb === null, 'single-ambulance run: no tags');
+});
+
+await t('10b: live traffic change posts to the run, ignores a no-op, and marks the run modified', async () => {
+  const posts = [];
+  globalThis.fetch = async (url, opts) => {
+    posts.push([url, JSON.parse(opts.body)]);
+    return { ok: true, status: 200, json: async () => ({ accepted: true }) };
+  };
+  setApiBase('http://localhost:8000');
+  const s = new RemoteSim(sc);
+  ok(s.setDensity('high') === false && posts.length === 0, 'no run id yet: nothing sent');
+  s.runId = 'r9';
+  ok(s.setDensity('medium') === false && posts.length === 0, 'same density: nothing sent, not modified');
+  ok(s.setDensity('high') === true);
+  await flush();
+  ok(posts.length === 1 && /\/api\/runs\/r9\/traffic$/.test(posts[0][0]) && posts[0][1].density === 'high');
+  ok(s.modifiedLive === true && s.snapshot().modifiedLive === true);
+  ok(s.setDensity('custom', 410.4) === true);
+  await flush();
+  ok(posts[1][1].rate === 410 && !('density' in posts[1][1]));
+  ok(s.setDensity('custom', 410) === false, 'same custom rate: no-op');
+  s.finished = true;
+  ok(s.setDensity('low') === false && s.canLive === false, 'finished run takes no more changes');
+});
+
+await t('10b: a rejected live change shows the backend message and is not hidden', async () => {
+  globalThis.fetch = async () => ({ ok: false, status: 409, json: async () => ({ detail: 'the run has already finished' }) });
+  const s = new RemoteSim(sc);
+  s.runId = 'r9';
+  s.setDensity('high');
+  await flush();
+  ok(/already finished/.test(s.snapshot().liveError));
+});
+
+await t('10b: dispatch posts origin and dest, counts up to 3, then refuses', async () => {
+  const posts = [];
+  let n = 1;
+  globalThis.fetch = async (url, opts) => {
+    posts.push([url, JSON.parse(opts.body)]);
+    n++;
+    return { ok: true, status: 200, json: async () => ({ accepted: true, ambulance_id: `amb${n - 1}`, ambulance_count: n }) };
+  };
+  const s = new RemoteSim(sc);
+  ok(s.canDispatch === false && (await s.dispatch('N0', 'S0')) === false && posts.length === 0, 'not live yet');
+  s.runId = 'r9';
+  ok(s.canDispatch && (await s.dispatch('N0', 'S0')) === true);
+  ok(/\/api\/runs\/r9\/dispatch$/.test(posts[0][0]) && posts[0][1].origin === 'N0' && posts[0][1].dest === 'S0');
+  ok(s.ambCountTotal === 2 && s.modifiedLive && s.snapshot().ambCount === 2);
+  await s.dispatch('S1', 'N1');
+  ok(s.ambCountTotal === 3 && s.canDispatch === false && s.snapshot().canDispatch === false);
+  ok((await s.dispatch('W1', 'E0')) === false && posts.length === 2, 'cap of 3 is enforced before any request');
+});
+
+await t('10b: Compare/Stress requests stay clean (no live flag, no ambulance list)', async () => {
+  const bodies = [];
+  globalThis.fetch = async (url, opts) => {
+    if (opts && opts.method === 'POST') {
+      bodies.push(JSON.parse(opts.body));
+      return { ok: true, status: 202, json: async () => ({ id: 'q1' }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ status: 'done', summary: { metrics: { ambFinished: true, ambTravelTime: 80 }, safety: {} } }) };
+  };
+  const { runSumoOne } = await import('../sumoCompare.js');
+  await runSumoOne({ ...sc, extraAmbs: [{ origin: 'N0', dest: 'S0', start: 70 }] }, 'C');
+  ok(bodies.length === 1 && !('live' in bodies[0]) && !('ambulances' in bodies[0]));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
