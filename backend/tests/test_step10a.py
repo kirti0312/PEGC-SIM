@@ -512,6 +512,69 @@ def test_api_unknown_run_for_live_commands(api_client):
     assert api_client.post("/api/runs/nope/dispatch", json={"origin": "W0", "dest": "E1"}).status_code == 404
 
 
+# ------------------------------------------------------------------ 8. cancel (Restart must not leave a paced run blocking the queue)
+def test_live_control_cancel_rejects_commands_and_sets_flag():
+    lv = LiveControl(1)
+    lv.set_traffic(300)
+    lv.cancel()
+    assert lv.cancelled and lv.finished and lv.drain() == []
+    with pytest.raises(LiveError):
+        lv.dispatch("N0", "S0")
+
+
+def test_runner_stops_at_once_when_a_live_run_is_cancelled(multi_sumo):
+    lv = LiveControl(1)
+
+    def on_step(snap):
+        if snap["t"] >= 80.0:
+            lv.cancel()
+
+    r = runner.run_scenario(Scenario(seed=2, density="low"), "C", label="cancel1", live=lv, on_step=on_step)
+    assert r.metrics["time"] < 90.0 and lv.finished                       # far short of the full 420 s
+
+
+def test_manager_cancels_queued_and_running_live_runs_and_next_run_starts():
+    import threading
+    import time
+    from api.service import RunManager
+    gate = threading.Event()
+    started = []
+
+    def stub(s, strategy, label, cfg, on_step, live=None):
+        started.append(label)
+        if live is not None:
+            t0 = time.time()
+            while not live.cancelled and time.time() - t0 < 5 and not gate.is_set():
+                time.sleep(0.01)
+        from pegc_sumo.runner import RunResult
+        return RunResult(strategy, s, {"ambTravelTime": 1.0}, [], [], {"violations": 0}, 0, 0.0, "x")
+
+    mgr = RunManager(stub, snapshot_interval=0.001, live_speed=None)
+    first = mgr.submit("run", ("A",), Scenario(seed=1), {}, live=True)
+    second = mgr.submit("run", ("A",), Scenario(seed=2), {}, live=True)
+    third = mgr.submit("run", ("A",), Scenario(seed=3), {}, live=False)
+    for _ in range(200):
+        if first.status == "running":
+            break
+        time.sleep(0.01)
+    assert first.status == "running" and second.status == "queued"
+    assert mgr.cancel(second.id).status == "cancelled"                    # waiting run: removed from the queue
+    assert mgr.cancel(first.id) is first                                  # running live run: told to stop
+    assert third.done.wait(5) and third.status == "done"                  # the next run is not blocked
+    assert first.done.wait(5) and first.status == "cancelled"
+    assert second.status == "cancelled" and len(started) == 2             # the cancelled queued run never started
+    assert mgr.cancel("nope") is None
+
+
+def test_api_cancel_endpoint(api_client):
+    api_client.gate.clear()
+    rid = api_client.post("/api/runs", json={"strategy": "A", "live": True}).json()["id"]
+    r = api_client.post(f"/api/runs/{rid}/cancel")
+    assert r.status_code == 200 and r.json()["id"] == rid
+    api_client.gate.set()
+    assert api_client.post("/api/runs/nope/cancel").status_code == 404
+
+
 def sumo_available():
     try:
         from pegc_sumo.sumo_io import find_binary

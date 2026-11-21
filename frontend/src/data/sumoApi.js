@@ -65,6 +65,8 @@ export const startRun = (scenario, strategy, opts = {}) =>
   req('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(runBody(scenario, strategy, opts)) });
 const post = (path, body) => req(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 // Live changes while a run is going (run must have been started with live: true).
+// Stop a run the user has left (Restart, a new Launch): a paced live run would otherwise keep the backend busy.
+export const cancelRun = (id) => post(`/api/runs/${encodeURIComponent(id)}/cancel`, {});
 export const setLiveTraffic = (id, change) => post(`/api/runs/${encodeURIComponent(id)}/traffic`, change);
 export const dispatchAmbulance = (id, origin, dest) => post(`/api/runs/${encodeURIComponent(id)}/dispatch`, { origin, dest });
 export const getRun = (id, withLog = false) => req(`/api/runs/${encodeURIComponent(id)}${withLog ? '?log=1' : ''}`);

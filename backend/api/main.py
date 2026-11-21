@@ -50,7 +50,7 @@ class RunRequest(BaseModel):
 
 
 def create_app(runner=None, calibration_path: str | None = None, snapshot_interval: float = 0.125,
-               c3_path: str | None = None, sim_interval: float | None = None, live_speed: float | None = 4.0) -> FastAPI:
+               c3_path: str | None = None, sim_interval: float | None = None, live_speed: float | None = 12.0) -> FastAPI:
     app = FastAPI(title="PEGC SUMO backend", version="step8")
     origins = [o for o in os.environ.get("PEGC_CORS_ORIGINS",
                "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173").split(",") if o]
@@ -100,6 +100,13 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
         if run.live is None:
             raise HTTPException(409, "this run was not started with live=true")
         return run
+
+    @app.post("/api/runs/{run_id}/cancel")
+    def cancel_run(run_id: str):
+        run = mgr.cancel(run_id)
+        if run is None:
+            raise HTTPException(404, "unknown run id")
+        return {"id": run.id, "status": run.status}
 
     @app.post("/api/runs/{run_id}/traffic")
     def live_traffic(run_id: str, body: TrafficChange):
@@ -164,7 +171,8 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
                 if sent < len(run.snapshots):
                     await ws.send_json({"type": "snapshot", **run.snapshots[sent]})
                     sent += 1
-                    await asyncio.sleep(snapshot_interval)
+                    # A live run is already paced by the backend; the browser queues frames and plays them at its own speed.
+                    await asyncio.sleep(snapshot_interval if run.live is None else 0)
                     continue
                 if finished:
                     break
@@ -173,7 +181,8 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
                 await ws.send_json({"type": "summary", "id": run.id, "status": "done", **run.meta, "summary": run.summary,
                                     "log": run.log or [], **sv.live_fields(run)})
             else:
-                await ws.send_json({"type": "error", "engine": ENGINE, "id": run.id, "detail": run.error})
+                await ws.send_json({"type": "error", "engine": ENGINE, "id": run.id,
+                                    "detail": run.error or ("run cancelled" if run.status == "cancelled" else None)})
             await ws.close()
         except Exception:  # noqa: BLE001 - client went away
             pass
@@ -183,4 +192,4 @@ def create_app(runner=None, calibration_path: str | None = None, snapshot_interv
 
 # the real server samples every 0.5 simulated seconds (about 840 frames per run), played out at ~8 frames per second
 app = create_app(sim_interval=float(os.environ.get("PEGC_SIM_INTERVAL", "0.5")),
-                 live_speed=float(os.environ.get("PEGC_LIVE_SPEED", "4")))
+                 live_speed=float(os.environ.get("PEGC_LIVE_SPEED", "12")))

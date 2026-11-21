@@ -39,6 +39,7 @@ export class SimController {
     this.reduced = false;
     this.insetsMode = 'default';
     this.follow = false;
+    this.followId = null;
     this.wheelMode = 'move';
     this.followZoom = 5.4;
     this.startAmbient('medium', 11);
@@ -225,8 +226,23 @@ export class SimController {
     cam.flyTo(a.x, a.y, Math.max(cam.zoom, 4.5), 0.8, () => (sim.amb && sim.amb.inNet ? [sim.amb.x, sim.amb.y] : null));
     return true;
   }
+  // Step 10b: with several ambulances the user picks which one the camera follows (null = the automatic one).
+  setFollowAmb(id) {
+    this.followId = id;
+    this.followLock = false;
+    this.setFollow(true);
+  }
+  followTarget() {
+    const s = this.sim;
+    if (this.followId && s.ambs && typeof s.ambs.get === 'function') {
+      const a = s.ambs.get(this.followId);
+      return a && a.inNet && !a.done ? a : null;   // the chosen ambulance is not on the map yet or has finished: hold the view
+    }
+    return s.amb;
+  }
   setFollow(on) {
     this.follow = !!on;
+    if (!on) this.followId = null;
     if (!on) this.followLock = false;
     this.dirty = true;
     this.emit(true);
@@ -281,6 +297,7 @@ export class SimController {
       densityChanged: this.densityChanged,
       fps: this.fps,
       follow: this.follow,
+      followId: this.followId,
       wheelMode: this.wheelMode,
       ambient: this.sim.ambient,
     };
@@ -296,7 +313,7 @@ export class SimController {
   // Smoothly centre the camera on the ambulance (interpolated position); when it is not on
   // the network, follow nothing and keep the current view.
   updateFollow(dtReal) {
-    const a = this.sim.amb;
+    const a = this.followTarget();
     if (!a || !a.inNet || a.done) return;
     const cam = this.renderer.cam;
     const wx = a.px + (a.x - a.px) * this.alpha;

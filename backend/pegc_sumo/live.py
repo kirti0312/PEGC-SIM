@@ -25,6 +25,7 @@ class LiveControl:
         self.amb_total = n_ambulances          # ambulances the run has had or has been told to get
         self.modified = False
         self.finished = False
+        self.cancelled = False                 # set by cancel(): the runner stops at the next step
         self.t = 0.0                           # latest simulated time, set by the runner
         self.events: list = []                 # what was applied, with the simulated time
         self._q: deque = deque()
@@ -76,6 +77,13 @@ class LiveControl:
         wait = self._wall0 + sim_t / self.speed - now
         if wait > 0:
             time.sleep(min(wait, 1.0))
+
+    def cancel(self) -> None:
+        """Stop the run (the front end left it, e.g. Restart). No further commands are accepted."""
+        with self._lock:
+            self.cancelled = True
+            self.finished = True
+            self._q.clear()
 
     def close(self) -> None:
         with self._lock:

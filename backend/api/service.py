@@ -225,7 +225,7 @@ class RunManager:
     """One worker thread, one run at a time (scenarios share one routes file). Strategies of a compare run one after another."""
 
     def __init__(self, runner=None, snapshot_interval: float = 0.125, max_queued: int = 20, max_kept: int = 200,
-                 max_snapshots: int = 3000, sim_interval: float | None = None, live_speed: float | None = 4.0):
+                 max_snapshots: int = 3000, sim_interval: float | None = None, live_speed: float | None = 12.0):
         self.live_speed = live_speed              # Step 10: simulated seconds per wall second for live runs
         self.sim_interval = sim_interval          # None: sample by wall clock (old behaviour); else every N simulated seconds
         self.runner = runner or default_runner
@@ -249,13 +249,27 @@ class RunManager:
                 run.live = LiveControl(len(scenario.ambulances) or 1, self.live_speed)
             self.runs[run.id] = run
             for old in [r.id for r in sorted(self.runs.values(), key=lambda r: r.created)
-                        if r.status in ("done", "error")][:max(0, len(self.runs) - self.max_kept)]:
+                        if r.status in ("done", "error", "cancelled")][:max(0, len(self.runs) - self.max_kept)]:
                 del self.runs[old]
         self.q.put(run.id)
         return run
 
     def get(self, run_id: str):
         return self.runs.get(run_id)
+
+    def cancel(self, run_id: str):
+        """Cancel a waiting run, or stop a running live run. Returns the run (None if unknown). A running run that is not
+        live (Compare, Stress) cannot be interrupted and simply continues."""
+        with self.lock:
+            run = self.runs.get(run_id)
+            if run is None:
+                return None
+            if run.status == "queued":
+                run.status = "cancelled"
+                run.done.set()
+            elif run.status == "running" and run.live is not None:
+                run.live.cancel()
+            return run
 
     def busy(self) -> dict:
         with self.lock:
@@ -299,6 +313,8 @@ class RunManager:
             if run is None:
                 continue
             with self.lock:
+                if run.status == "cancelled":            # cancelled while waiting in the queue
+                    continue
                 run.status, self.current = "running", run.id
             try:
                 results = {}
@@ -316,7 +332,7 @@ class RunManager:
                                            live_events=clean(list(run.live.events)))
                 else:
                     run.results = results
-                run.status = "done"
+                run.status = "cancelled" if (run.live is not None and run.live.cancelled) else "done"
             except Exception as e:                       # noqa: BLE001 - report any failure to the client
                 run.error, run.status = f"{type(e).__name__}: {e}", "error"
             finally:

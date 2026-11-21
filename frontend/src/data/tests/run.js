@@ -284,5 +284,44 @@ await t('10b: Compare/Stress requests stay clean (no live flag, no ambulance lis
   ok(bodies.length === 1 && !('live' in bodies[0]) && !('ambulances' in bodies[0]));
 });
 
+await t('10b: leaving a running SUMO run cancels it on the backend, once; finished or failed runs are not cancelled', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, opts) => { calls.push(String(url)); return { ok: true, status: 200, json: async () => ({ id: 'r9', status: 'cancelled' }) }; };
+  setApiBase('http://localhost:8000');
+  const a = new RemoteSim(sc);
+  a.runId = 'r9';
+  a.dispose();
+  await flush();
+  ok(calls.length === 1 && /\/api\/runs\/r9\/cancel$/.test(calls[0]), calls.join());
+  const done = new RemoteSim(sc);
+  done.runId = 'r8';
+  done.summary = { metrics: {} };
+  done.dispose();
+  const failed = new RemoteSim(sc);
+  failed.runId = 'r7';
+  failed.error = new BackendError('x', 'http');
+  failed.dispose();
+  const none = new RemoteSim(sc);
+  none.dispose();
+  await flush();
+  ok(calls.length === 1, 'no cancel for a finished run, a failed run, or a run that never got an id');
+});
+
+await t('10b: a run whose start request returns after the user restarted is cancelled straight away', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, opts) => {
+    calls.push([String(url), opts && opts.method]);
+    if (/\/cancel$/.test(String(url))) return { ok: true, status: 200, json: async () => ({ status: 'cancelled' }) };
+    return { ok: true, status: 202, json: async () => ({ id: 'late1' }) };
+  };
+  setApiBase('http://localhost:8000');
+  const s = new RemoteSim(sc);
+  const p = s.start();
+  s.dispose();                       // restart while the POST is in flight (runId not known yet, so dispose sends nothing)
+  await p;
+  await flush();
+  ok(calls.some(([u]) => /\/api\/runs\/late1\/cancel$/.test(u)), JSON.stringify(calls));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

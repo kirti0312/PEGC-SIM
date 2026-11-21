@@ -3,7 +3,7 @@ import { ctrl } from './ctrl.js';
 import { STRATEGIES, CONFIG, DENSITY_CHOICES, entryRate } from '../engine/config.js';
 import { SPEEDS, BOUNDARY_IDS, placeLabel } from './places.js';
 import { useSource } from '../data/useSource.js';
-import { MAX_AMBS } from '../data/ambColors.js';
+import { MAX_AMBS, ambColor, ambLabel } from '../data/ambColors.js';
 import { useRenderCount } from './hooks.js';
 
 // Step 10b, SUMO mode only: send another ambulance into the running simulation.
@@ -82,6 +82,16 @@ export const ControlBar = memo(function ControlBar({ snap, scenario, onStrategy,
         <button className="cb-btn" onClick={() => ctrl.fitAll()} title="Smoothly return to the full six-junction overview (key 0)">Overview</button>
         <button className="cb-btn" onClick={() => ctrl.centerAmbulance()} disabled={!run || snap.ambDone} title="Glide to the ambulance (key C)">Center<span className="cb-long"> ambulance</span></button>
         <button className={`cb-btn ${snap.follow ? 'on' : ''}`} onClick={() => ctrl.setFollow(!snap.follow)} disabled={!run} title="Camera follows the ambulance">Follow<span className="cb-long"> ambulance</span></button>
+        {snap.ambCount > 1 && snap.ambs && Array.from({ length: snap.ambCount }, (_, i) => `amb${i}`).map((id) => {
+          const a = snap.ambs.find((x) => x.id === id);
+          const on = snap.follow && snap.followId === id;
+          return (
+            <button key={id} className={`cb-btn ${on ? 'on' : ''}`} onClick={() => ctrl.setFollowAmb(id)} disabled={!run || (a && a.done)}
+              title={a && a.active ? `Camera follows ambulance ${ambLabel(id)}` : a && a.done ? `${ambLabel(id)} has finished` : `${ambLabel(id)} has not entered the map yet; the view holds until it does`}>
+              <span className="amb-dot sm" style={{ background: ambColor(id) }} />{ambLabel(id)}
+            </button>
+          );
+        })}
       </div>
       <div className="cb-group">
         <button className="cb-btn" onClick={() => ctrl.setWheelMode(snap.wheelMode === 'zoom' ? 'move' : 'zoom')} title={snap.wheelMode === 'zoom' ? 'The wheel zooms the map. Click to make the wheel and touchpad scroll move the map instead (Ctrl+wheel or pinch always zooms).' : 'The wheel and touchpad scroll move the map. Click to make the wheel zoom instead (Ctrl+wheel or pinch always zooms).'}>Wheel: {snap.wheelMode === 'zoom' ? 'Zoom' : 'Move'}</button>

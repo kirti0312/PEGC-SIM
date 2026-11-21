@@ -7,7 +7,7 @@ import { CONFIG } from '../engine/config.js';
 import { buildNetwork, findRoute } from '../engine/network.js';
 import { makeSignal } from '../engine/signals.js';
 import { setPose } from '../engine/vehicles.js';
-import { startRun, openStream, BackendError, scenarioAmbulances, setLiveTraffic, dispatchAmbulance } from './sumoApi.js';
+import { startRun, openStream, BackendError, scenarioAmbulances, setLiveTraffic, dispatchAmbulance, cancelRun } from './sumoApi.js';
 import { ambColor, MAX_AMBS } from './ambColors.js';
 import { normaliseMetrics } from './sumoCompare.js';
 
@@ -68,7 +68,10 @@ export class RemoteSim {
       this.info = r;
       this.runId = r.id;
       this._dirty = true;
-      if (this.closed) return;
+      if (this.closed) {                     // the user restarted while the request was in flight
+        cancelRun(r.id).catch(() => {});
+        return;
+      }
       this.closeStream = openStream(r.id, {
         message: (m) => this.onMessage(m),
         error: (e) => this.fail(e),
@@ -83,6 +86,8 @@ export class RemoteSim {
   dispose() {
     this.closed = true;
     if (this.closeStream) this.closeStream();
+    // A run that is still going must not keep the backend busy for the next Launch.
+    if (this.runId && !this.summary && !this.error && !this.finished) cancelRun(this.runId).catch(() => {});
   }
   fail(e) {
     if (this.closed) return;

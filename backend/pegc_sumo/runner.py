@@ -200,6 +200,8 @@ def run_scenario(s: Scenario, strategy: str = "A", label: str | None = None, cfg
         for k in range(steps):
             ctx.t = k * cfg.dt
             if live is not None:
+                if live.cancelled:                  # the front end restarted or left: stop at once
+                    break
                 apply_live(ctx.t)
                 for v in stream.step():
                     insert(v)
