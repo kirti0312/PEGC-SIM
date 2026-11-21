@@ -1,254 +1,389 @@
-# PEGC: Predictive Emergency Green Corridor
+<div align="center">
 
-A traffic simulation platform that tests signal-control strategies for reducing ambulance and fire-engine delay **without causing excessive congestion elsewhere**.
+# 🚑 PEGC — Predictive Emergency Green Corridor
 
-[Problem](#1-the-problem) · [Solution](#2-the-proposed-solution) · [Strategies](#3-strategies-compared) · [How PEGC decides](#4-how-pegc-decides) · [Architecture](#6-system-architecture) · [Demo](#8-the-browser-demo) · [Setup](#9-setup-and-usage) · [Experiments](#10-experiments-and-metrics) · [Results](#11-results) · [Future work](#13-future-work)
+### Predict the arrival. Prepare the signal. Measure the impact.
 
-> The repository includes a browser demo with its own mini traffic simulator. Its numbers come from that simulator and are **not** SUMO results.
+**Nexora Titans · Katathon 6.0 · Problem Statement 102**  
+**Emergency-Corridor Traffic Simulator**  
+*Smart Cities, Mobility and Resilient Infrastructure*
+
+**A simulation and experimentation platform for safer, smarter emergency-vehicle signal priority.**
+
+</div>
 
 ---
 
-## 1. The problem
+## 🌟 The idea
 
-An ambulance that meets a red light or a queue loses time that can matter for a patient. Cities answer with emergency priority, but crude priority has a hidden cost: forcing green for the ambulance can leave cross streets jammed, and the jam can outlast the emergency.
+When an ambulance approaches a busy junction, simply turning its light green is not always enough. Vehicles may already be queued in its lane, other approaches may have long waits, and abrupt signal changes can be unsafe.
 
-The task is to build a simulation that tests signal strategies to reduce emergency-vehicle delay **without** causing excessive congestion elsewhere. The two goals pull against each other, so PEGC is built to **measure the trade-off**, not assume it away.
+**PEGC (Predictive Emergency Green Corridor)** tests a more thoughtful approach: **anticipate an emergency vehicle's arrival, prepare upcoming traffic signals early, account for queue clearance and cross-traffic costs, enforce safe signal transitions, and help normal traffic recover afterward.**
 
-## 2. The proposed solution
+Instead of making unverified claims about saving lives or deploying on real streets, PEGC lets users **simulate, observe, compare and measure** emergency-priority strategies under controlled traffic conditions.
 
-PEGC runs one traffic scenario under several signal strategies and compares the results using the same road network, demand, ambulance route and random seed.
+> **Important:** The PEGC website is a **traffic simulator and research/demo dashboard**. It does not access live city traffic lights, real ambulances, CCTV or GPS. All vehicle movements and traffic measurements come from simulation.
 
-At its core is a controller (Strategy C) that:
+## ✨ Features
 
-1. **Predicts** (machine learning) when the ambulance will reach each junction on its route, allowing for queues ahead.
-2. **Pre-clears** the path by starting each signal change early enough to cover yellow, all-red and the queue in the ambulance's lane.
-3. **Optimises** (cost-based optimisation) each decision by weighing ambulance delay against cross-street waiting, downstream spillback and starvation of any approach.
-4. **Recovers** normal traffic after the ambulance passes.
-5. **Stays safe**, because every command passes through a separate safety layer that no strategy can override.
+### 🚦 Predictive emergency green corridor
 
-Every decision is written to a plain-language log built from real values, so the controller can explain itself.
+- **Rule-based ETA estimation:** estimate when an ambulance will reach upcoming junctions from its simulated position, speed and route.
+- **Two-junction lookahead:** prepare traffic signals before the ambulance reaches them.
+- **Queue-aware preparation:** account for vehicles that must clear ahead of the ambulance.
+- **Cross-traffic impact evaluation:** weigh expected ambulance time saved against delays and spillback imposed on other vehicles.
+- **Signal safety layer:** enforce minimum green, yellow and all-red phases, emergency hold limits and maximum-wait protection.
+- **Traffic recovery:** prioritize restoring regular flow after the emergency vehicle passes.
+- **Decision logs:** inspect when the controller requests, declines, delays or releases priority.
 
-**Where AI is used.** PEGC combines a learned arrival-time predictor (machine learning) with cost-based optimisation that chooses the signal action (classical AI planning, not machine learning). The safety layer and the recovery rule are fixed rules, because safety guarantees should never depend on a learned model. The project does **not** use reinforcement learning or deep learning: optimisation was chosen because it is safer, easier to explain and more reliable within the project timeline, and reinforcement learning is listed under future work. The browser demo uses a rule-based estimate and does not include the trained model.
+**Future GPS integration:** Today's ETA uses **simulated ambulance position and movement**, not GPS. A future real-world version could integrate live ambulance GPS, traffic sensors and validated traffic-signal infrastructure to update ETA from actual vehicle movement. GPS integration is **not implemented in this prototype**.
 
-## 3. Strategies compared
+### 🗺️ Automatic route selection
 
-| ID | Strategy | Purpose |
+- Enter an **origin and destination**; the ambulance automatically follows a **shortest-distance available route** calculated using Dijkstra's algorithm.
+- Configure blocked road segments **before a run**; routing avoids those segments where an alternative path exists.
+- The controller coordinates signals along the selected route.
+
+**Current scope:** Routes are selected by distance and configured road availability—not by measured congestion. **Traffic-aware fastest-route recommendation and automatic mid-journey rerouting are not implemented.**
+
+### 🚑 Multiple emergency vehicles and live controls — Step 10
+
+In **SUMO backend mode**, PEGC supports:
+
+- **Up to three ambulances** in a single simulation, with configurable origins, destinations and departure times.
+- **Live dispatch:** insert an additional ambulance while a simulation is running (subject to the three-ambulance cap).
+- **Live traffic changes:** adjust traffic density while the SUMO simulation is running.
+- **Priority-conflict handling:** coordinate requests when multiple ambulances need incompatible signal directions.
+- **Individual ambulance analytics:** travel time, stops and delay, plus aggregate mean and worst delay when multiple ambulances are present.
+- **Visual identification and camera follow:** distinguish ambulances by colour and follow a chosen vehicle.
+- **Live-change flagging:** runs changed through dispatch or traffic controls are marked as modified and **are not treated as clean benchmark comparisons**.
+
+These capabilities are **specific to SUMO mode**. The separate browser mini-simulator remains available and retains its existing behaviour.
+
+### 🖥️ Interactive simulator website
+
+| Area | What you can do |
+|---|---|
+| **Command Centre** | Enter the simulator and view the city overview. |
+| **Configure** | Choose route endpoints, traffic density, seed, blocked roads and—when using SUMO—multiple ambulance settings. |
+| **Watch** | Visualize vehicles and signals, follow ambulances, inspect decision logs and view run metrics; in SUMO mode, use live traffic and dispatch controls. |
+| **Compare** | Run signal strategies under controlled, comparable scenarios and inspect performance differences. |
+| **Stress Test** | Test challenging traffic and preconfigured road-blockage conditions. |
+
+The interface offers **two distinct simulation sources**:
+
+1. **Browser mini-simulator:** JavaScript-based, runs locally in the browser and is useful for quick demonstrations.
+2. **SUMO backend:** SUMO traffic simulation controlled by Python through TraCI; frames and results are delivered to the React dashboard through FastAPI and WebSockets.
+
+**Results from the two engines are labelled separately and must not be mixed.** A deployed frontend by itself does **not** guarantee the SUMO backend is online.
+
+---
+
+## 🧠 How PEGC works
+
+```mermaid
+flowchart TD
+    A[Configure origin, destination, traffic and seed] --> B[Dijkstra: shortest available route]
+    B --> C[Start traffic simulation]
+    C --> D[Read simulated ambulance and junction state]
+    D --> E[Estimate arrival time at upcoming junctions]
+    E --> F[Check queues and required signal preparation time]
+    F --> G[Compare ambulance benefit with cross-traffic cost]
+    G --> H[Safety layer validates signal requests]
+    H --> I[Apply signals through simulator]
+    I --> J[Observe movement, log decisions and measure outcomes]
+    J --> K[Recovery after ambulance passes]
+    J -->|Next simulation step| D
+```
+
+PEGC's **signal decisions are rule-based and cost-based**, not the output of a trained machine-learning model. The project may have used AI-assisted development tools, but **ML-based ETA prediction is not part of the completed prototype**.
+
+### Safety rules
+
+The simulation controller enforces a **7-second minimum green**, **3-second yellow**, **2-second all-red**, **25-second emergency hold cap** and **90-second maximum-wait protection**. Requests must pass the safety layer; a priority request is not permission to create conflicting green movements. These are **prototype simulation rules**, not a certification for operating public traffic signals.
+
+---
+
+## ⚖️ Signal strategies and fair comparison
+
+PEGC is not only a visualization: it is an **experimental platform** for comparing different control policies.
+
+| Strategy | Approach | Purpose |
 |---|---|---|
-| A | Fixed-time signals | Baseline: ordinary operation, ignores the ambulance |
-| B | Basic emergency priority | Forces the ambulance's direction green when it is near, ignoring cross traffic |
-| C | Full PEGC | Predictive, queue-aware corridor with recovery |
-| C1 | PEGC without queue awareness | Ablation: tests whether queue awareness helps |
-| C2 | PEGC without recovery | Ablation: tests whether recovery helps |
+| **A — Fixed-Time** | Runs a predefined traffic-signal schedule and ignores emergency vehicles. | Baseline. |
+| **B — Basic Emergency Priority** | Requests green for the ambulance's direction when it comes within **120 m** of its next junction, without PEGC's full cross-traffic evaluation. | Simple emergency-priority baseline. |
+| **C — PEGC** | Predicts arrival, considers queues and cross-traffic cost, requests safe early changes and manages recovery. | Main proposed controller. |
+| **C1 — No Queue Awareness** | Variant of C without queue-aware timing. | Tests the contribution of queue awareness. |
+| **C2 — No Recovery** | Variant of C without the recovery behaviour. | Tests the contribution of recovery. |
+| **C3 — Cross-Traffic Fairness Variant** | SUMO-side variant of C with an adjusted cross-street longest-wait penalty. | Studies the ambulance-speed versus fairness trade-off. |
 
-The ablations show *which part* of PEGC creates any benefit, not only whether the whole system performs well.
+### How comparisons stay fair
 
-## 4. How PEGC decides
+For a clean comparison, each strategy is run with the **same road network, origin/destination, selected route, road blockages, traffic demand, random seed and calibrated SUMO traffic settings**. Only the **signal-control strategy** changes. That means differences in ambulance travel time and other traffic outcomes can be attributed more meaningfully to the controller, rather than to unrelated changes in the scenario.
 
-For each junction ahead of the ambulance:
+The comparison uses repeatable random seeds. **Seeds 1–5** were used for tuning and **seeds 101–110** were held out for reporting. The evaluation spans **three traffic densities × two routes × open/blocked road configurations**, with repeated seeds and multiple strategies. SUMO's traffic presets were calibrated before evaluation; the **high-traffic preset remains intentionally oversaturated** as a stress condition.
 
-1. **Predict arrival time (machine learning).** A trained model estimates when the ambulance will reach each upcoming junction from its distance, speed and the queue ahead in its lane. The model is specified below.
-2. **Compute lead time.** The remaining minimum green, plus yellow, plus all-red, plus the time needed to discharge the queued vehicles in the ambulance's lane.
-3. **Compare actions.** Hold the current phase, switch now, or switch at the prepared moment.
-4. **Score each action** on four things: ambulance delay, cross-street waiting, risk of downstream spillback, and the longest wait on any single approach. Ambulance delay carries the most weight but never enough to ignore the others. The weights are set in the controller configuration and tuned on separate seeds.
-5. **Filter by safety.** Any action that breaks a safety rule is delayed or rejected, however good its score.
-6. **Choose the best remaining action** and log the inputs, the choice and the reason.
-7. **Prepare the next junction** on the route in the same cycle.
+**Live-edited runs are excluded from clean A/B/C comparisons.** They are useful for demonstration and exploration, but a mid-run traffic or dispatch change would undermine an identical-scenario benchmark.
 
-**Recovery.** After the ambulance clears a junction, the hold is released and the approach with the largest queue and waiting time is served first, until queues return near their pre-ambulance level.
+### What is measured?
 
-**Which steps are AI.** Step 1 is machine learning. Steps 2 to 6 are optimisation and fixed rules, not machine learning, and the recovery stage is a fixed rule.
+- **Ambulance travel time:** departure-to-arrival time; lower is better.
+- **Ambulance stops and delay:** interruption and travel-time overhead.
+- **Average ordinary-vehicle wait:** cost to other road users.
+- **Longest wait and 95th-percentile wait:** fairness and worst-case delay indicators.
+- **Maximum queue length:** congestion at approaches.
+- **Throughput:** vehicles completing their trips per unit time.
+- **Recovery behaviour:** whether and when traffic returns toward a defined baseline.
+- **Safety violations:** recorded breaches of the simulator's safety checks.
 
-**Arrival-time predictor (machine learning).** A small supervised model, trained on simulated ambulance runs, predicts arrival time. It is evaluated on traffic it has never seen, split by seed or scenario and not by random rows.
+### 📊 Reported SUMO evaluation
 
-| Item | Value |
+The team's recorded **900-run SUMO evaluation** found:
+
+| Finding | Reported result |
 |---|---|
-| Prediction target | Time for the ambulance to reach the stop line of each upcoming junction |
-| Features | Distance, current speed, queue ahead, signal state, traffic density |
-| Algorithm | TBD |
-| Training data | TBD |
-| Evaluation split | Held-out seeds |
-| Mean absolute error | TBD |
-| Baseline compared against | Distance divided by speed (error: TBD) |
+| Ambulance travel time, **C vs A** | Approximately **32–51% lower** across reported test conditions |
+| Ambulance travel time, **C vs B** | Approximately **5–15 seconds faster** |
+| Recorded simulation safety violations | **0** across the reported 900 runs |
+| Cross-street trade-off | Longest wait was **up to about 27% higher** in some conditions |
 
-The predictor is judged by two checks: it must beat the simple distance-and-speed baseline on unseen data, and its predictions must change signal decisions. Both results are reported in [Results](#11-results).
+These are **team-reported simulation results**, not independently verified real-road outcomes. Some high-traffic baseline runs did not finish before the observation limit; the analysis documents finished counts and sensitivity checks rather than treating missing travel times as zero. Zero recorded simulation violations does **not** establish real-world safety.
 
-## 5. Safety rules
+The experiment scripts, CSV outputs and analysis utilities are under `backend/experiments/`; the frozen Step 5 baseline is under `baselines/step5/`. The C3 tuning and later evaluation are separate from that original frozen baseline.
 
-Enforced by a separate layer that every strategy passes through:
+---
 
-| Rule | Value |
+## 🏗️ Technology stack
+
+| Layer | Technology | Role |
+|---|---|---|
+| Frontend | **React 18, Vite 5, JavaScript, CSS** | Interactive simulator website and controls |
+| Rendering | **HTML Canvas 2D** | Road network, vehicle and signal visualization |
+| Browser engine | **JavaScript ES modules, Web Workers** | Self-contained browser simulation, comparisons and stress runs |
+| Backend | **Python 3.10+, FastAPI, Uvicorn, Pydantic** | Scenario validation, run management and API |
+| Live communication | **WebSockets** | Stream SUMO frames, vehicle states and decision logs |
+| Traffic simulation | **SUMO, TraCI, sumolib** | Vehicle movement, junction states and signal control |
+| Algorithms | **Dijkstra; rule-based ETA; cost-based PEGC controller** | Routing, prediction and priority decisions |
+| Testing and reporting | **pytest, Node.js tests, Matplotlib, CSV** | Regression tests and experimental analysis |
+| Development | **Git, GitHub, GitHub Codespaces** | Source control and Linux-based SUMO environment |
+| Frontend deployment | **Vercel** | Browser application hosting |
+
+**No external live traffic, GPS or CCTV API is required.**
+
+### Repository layout
+
+```text
+.
+├── frontend/
+│   ├── src/engine/        # Browser mini-simulator and strategies
+│   ├── src/render/        # Canvas rendering and playback controller
+│   ├── src/data/          # Browser/SUMO source adapter and API client
+│   ├── src/ui/            # React dashboard screens and controls
+│   ├── scripts/           # Regression and reference-data tools
+│   └── package.json
+├── backend/
+│   ├── api/               # FastAPI app, run manager, WebSocket endpoints
+│   ├── pegc_sumo/         # SUMO network, demand, routing, controllers, safety
+│   ├── experiments/       # Calibration, batch runs, reports and charts
+│   ├── tests/             # Python tests and regression fixtures
+│   └── requirements.txt
+└── baselines/step5/       # Frozen SUMO experiment baseline
+```
+
+---
+
+## 🚀 Setup and run — Windows users (GitHub Codespaces recommended)
+
+> **Why Codespaces?** The frontend works on Windows, but the team's Windows environment blocked SUMO executables. **GitHub Codespaces provides a Linux development environment** where the SUMO/Python backend can run without relying on a local Windows SUMO installation. The simplest reliable demo is to run **both frontend and backend inside the same Codespace**.
+
+### Prerequisites
+
+- A **GitHub account** with access to this repository and GitHub Codespaces.
+- A modern browser such as Chrome or Edge.
+- No local SUMO installation is needed when following the Codespaces instructions.
+
+### Step 1 — Open the project in Codespaces
+
+1. Open this GitHub repository.
+2. Click **Code → Codespaces → Create codespace on main** (or open an existing Codespace).
+3. Wait for the browser-based VS Code environment and terminal to load.
+4. Confirm you are in the repository root, containing the `frontend/` and `backend/` folders:
+
+```bash
+pwd
+ls
+```
+
+If your Codespace already has dependencies installed, you can skip the corresponding install commands below.
+
+### Step 2 — Install and start the SUMO backend
+
+Open **Terminal 1** in Codespaces:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Check the Python/SUMO environment and API dependencies:
+
+```bash
+python -c "import traci, sumolib, fastapi; print('SUMO/TraCI/FastAPI imports OK')"
+```
+
+Start the backend **from inside `backend/`**:
+
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+Leave this terminal running. In another terminal, check:
+
+```bash
+curl http://localhost:8000/api/health
+```
+
+You should receive JSON reporting the backend status and SUMO availability. **If `sumo_found` is false**, inspect the installed `eclipse-sumo` package and SUMO executable setup before proceeding; the API alone cannot simulate traffic without SUMO.
+
+### Step 3 — Install and start the frontend
+
+Open **Terminal 2** in the same Codespace:
+
+```bash
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0
+```
+
+Leave this terminal running. Vite normally uses **port 5173**.
+
+### Step 4 — Forward the Codespaces ports
+
+1. Open the **Ports** tab in the Codespaces VS Code interface.
+2. Confirm **8000** (FastAPI) and **5173** (Vite) are forwarded; add them manually if necessary.
+3. Copy the **forwarded HTTPS URL for port 8000**. It will resemble `https://YOUR-CODESPACE-NAME-8000.app.github.dev`.
+4. Open the **forwarded URL for port 5173** in your browser.
+5. In the PEGC frontend, use its **API address setting** to enter the **port-8000 HTTPS URL** (without a trailing `/`) and switch the source to **SUMO backend**.
+
+**Important:** `http://localhost:8000` in a browser tab opened from a Windows laptop points to the **Windows laptop**, not automatically to the Codespace. Use the **forwarded Codespaces URL** when the frontend runs in your browser. Use an address accessible to that browser, and make sure your GitHub session has access to the forwarded port.
+
+If you cannot find the API-address control in your current UI build, configure the frontend's supported `VITE_API_BASE` setting before starting Vite:
+
+```bash
+# In the frontend/ directory, replace the URL with YOUR forwarded port-8000 URL
+export VITE_API_BASE="https://YOUR-CODESPACE-NAME-8000.app.github.dev"
+npm run dev -- --host 0.0.0.0
+```
+
+The frontend also supports a locally saved API-base setting. **Never commit a personal Codespaces URL or access token to the repository.**
+
+### Step 5 — Run a demonstration
+
+1. Open **Configure** and choose an origin, destination, traffic preset and seed.
+2. Choose **SUMO backend** as the simulation source.
+3. Optionally configure **two or three ambulances** with different departure times.
+4. Press **Launch** to watch the simulation and inspect the decision log.
+5. During a SUMO Watch run, try changing traffic density or dispatching another ambulance (up to the three-ambulance cap).
+6. After the run, inspect per-ambulance results and the run summary.
+7. Open **Compare** to evaluate strategies using **clean, fixed scenarios**; use **Stress Test** for heavier traffic or blocked-road experiments.
+
+**Note:** Compare and Stress Test are not live-dispatch experiments; they use controlled runs to preserve comparability. The backend processes jobs sequentially, so larger comparisons may take several minutes.
+
+### Step 6 — Run tests and check the production build
+
+In a backend terminal (with `.venv` activated):
+
+```bash
+cd backend
+python -m pytest -q
+```
+
+In a separate frontend terminal:
+
+```bash
+cd frontend
+npm run test:engine
+npm run test:data
+node scripts/baseline.mjs --check
+npm run build
+```
+
+The baseline check confirms the saved **45 browser simulation results** still match. The exact pytest count can change as tests are added; success means the suite finishes without failures. Do not rerun the original 900-run evaluation just to start the website.
+
+### Troubleshooting
+
+| Symptom | What to check |
 |---|---|
-| Minimum green | 7 s |
-| Yellow | 3 s |
-| All-red | 2 s |
-| Maximum emergency hold per junction | 25 s |
-| Maximum wait for any approach | 90 s (overrides emergency requests) |
-| Anti-flapping lockout | 10 s |
+| `ModuleNotFoundError` for `traci`, `sumolib` or `fastapi` | Activate `backend/.venv`, then run `pip install -r requirements.txt` from `backend/`. |
+| SUMO not found | Check the `eclipse-sumo` installation and the backend `/api/health` response. |
+| Frontend says backend unreachable | Keep Uvicorn running; verify port **8000** is forwarded and use its **HTTPS Codespaces URL**, not Windows `localhost`. |
+| WebSocket or CORS errors | Use the forwarded API origin, check port access and confirm the backend's allowed frontend origin configuration. |
+| Blank or missing SUMO frames | Verify the selected source is SUMO, a run has actually launched and the backend terminal shows no errors. |
+| Slow Compare/Stress Test | SUMO runs are queued and executed one at a time; use fewer seeds for a quick demo. |
+| Browser mode works but SUMO mode does not | The two engines are separate; browser mode does not prove the Python/SUMO service is connected. |
+| Local Windows SUMO fails to start | Use GitHub Codespaces as described above rather than changing system security policy. |
 
-Conflicting movements are never green together. After each run an audit counts conflicting greens and clearance violations. The required result is **zero**. Audit results are reported in [Results](#11-results).
+### Alternative: frontend-only preview on Windows
 
-## 6. System architecture
+For the browser mini-simulator **without SUMO backend features**, install Node.js and run from PowerShell:
 
-```
-Frontend (React)  <-->  Backend (FastAPI, REST + WebSocket)
-                              |
-        +---------------------+---------------------+
-   Simulation engine     Controller layer       Metrics engine
-   (SUMO via TraCI)      (A, B, C, ablations)   (event log -> KPIs)
-                              |
-                         Safety layer
-                (min green, clearance, caps, conflicts)
-```
-
-**Main loop, every simulated second:**
-
-1. The simulator advances and returns a state snapshot (positions, queues, signal phases, free space downstream).
-2. The predictor updates the ambulance's arrival times.
-3. The selected controller proposes signal commands.
-4. The safety layer approves, delays or rejects each command.
-5. Approved commands are applied; events and decisions are logged.
-6. The state is streamed to the dashboard.
-
-**Technology**
-
-| Layer | Technology |
-|---|---|
-| Traffic simulation | SUMO, controlled from Python through TraCI |
-| Controllers and prediction | Python, scikit-learn |
-| Backend | FastAPI with WebSocket |
-| Frontend | React with a canvas map |
-| Data and analysis | pandas, matplotlib, CSV or SQLite |
-
-## 7. Project status
-
-- [x] Six-junction road network
-- [x] Seeded traffic generation
-- [x] Strategy A (fixed-time)
-- [x] Strategy B (basic priority)
-- [x] Strategy C (PEGC)
-- [x] Ablations C1 and C2
-- [x] Safety layer and audit
-- [ ] Arrival-time predictor
-- [x] Metrics engine
-- [ ] FastAPI backend
-- [ ] SUMO pipeline
-- [x] React dashboard
-- [x] Blocked-road rerouting
-- [x] Browser mini-simulator demo
-
-## 8. The browser demo
-
-The repository includes a front-end prototype with its own **mini traffic simulator written in JavaScript**. It shows moving vehicles, queues, signals, the ambulance, a decision log and a strategy comparison, all computed from the demo's own simulation runs.
-
-- It is clearly labelled in the interface: **"Browser mini-simulator: not SUMO results."**
-- Its numbers describe the mini-simulator only and must not be quoted as SUMO results.
-- Its arrival-time estimate is rule-based. The machine learning model belongs to the full pipeline, not the demo.
-- In the full build, SUMO replaces the mini-simulator engine behind the same screens.
-
-**Screens:** Command Centre, Configure Scenario, Watch Simulation, Compare Strategies, and Stress Test and Explain.
-
-## 9. Setup and usage
-
-**Requirements:** Node.js 18 or later.
-
-```
-git clone <repo-url>
-cd pegc
+```powershell
+cd frontend
 npm install
 npm run dev
 ```
 
-Open the address that Vite prints. Other commands:
+Open the local Vite address shown in the terminal and select **Browser mini-simulator**. **Live multi-ambulance dispatch and live SUMO traffic changes require the Codespaces backend.**
 
-```
-npm run test:engine   # simulation-engine checks, run in Node
-npm run build         # production build
-npm run preview       # serve the production build
-```
+---
 
-**Run one scenario:** open the Configure screen, choose a scenario and launch it.
-**Compare strategies:** the Compare screen runs A, B and C (and optionally the ablations) on the same scenario and consecutive seeds in a background worker.
+## 🔌 API overview
 
-**Repository structure**
+The SUMO service exposes these endpoints:
 
-```
-pegc/
-  src/
-    engine/    network and routing, vehicles, signals, safety layer, strategies,
-               seeded random numbers, scenario runner, stress tests, worker, tests
-    render/    canvas renderer, camera, scene, sprites, controller
-    ui/        React screens and panels
-    styles/    design tokens and component styles
-  docs/        specification and visual reference
-  index.html, vite.config.js, package.json
-```
-
-## 10. Experiments and metrics
-
-The simulation engine and the strategy comparison are in `src/engine`. The Compare and Stress Test screens run their experiments through it.
-
-**Fairness rule.** Every strategy runs on the same road network, traffic demand, ambulance route, road blockage and random seed. Traffic is allowed to build up before the ambulance enters, so it is measured in a busy network.
-
-**Metrics** (all computed from saved event logs, never typed in):
-
-| Metric | Meaning |
+| Endpoint | Purpose |
 |---|---|
-| Ambulance travel time | Time from its start to its destination |
-| Ambulance stops | How often the ambulance was halted |
-| Average wait, other vehicles | Mean waiting time across ordinary vehicles |
-| Longest single wait | Longest continuous wait at any approach (detects starvation) |
-| Maximum queue | Largest queue seen on any lane |
-| Throughput | Vehicles completing trips per hour |
-| Recovery time | Time after the ambulance's last junction until queues stay near their pre-ambulance level for a sustained period |
-| Safety violations | Conflicting greens plus skipped clearances (target: 0) |
+| `GET /api/health` | Check backend status and SUMO availability. |
+| `POST /api/runs` | Start a scenario, optionally in live mode with multiple ambulances. |
+| `GET /api/runs/{id}` | Read run status and summary. |
+| `GET /api/compare` | Run controlled A/B/C comparisons. |
+| `WS /ws/runs/{id}` | Receive simulation frames and final summary. |
+| `POST /api/runs/{id}/traffic` | Change traffic in a live run. |
+| `POST /api/runs/{id}/dispatch` | Dispatch an additional ambulance in a live run. |
+| `POST /api/runs/{id}/cancel` | Cancel a supported queued or running live run. |
 
-Improvement is reported as the percentage change against fixed-time signals. A worse result is shown as worse.
+Interactive API documentation is available at **`/docs`** when the FastAPI backend is running.
 
-**Protocol**
+---
 
-1. Run a small pilot to confirm everything works.
-2. Tune controller weights on a set of tuning seeds only.
-3. Freeze all settings.
-4. Run every combination of traffic level (low, medium, high), ambulance route and strategy on separate test seeds. Tuning seeds and test seeds are listed in the experiment configuration.
-5. Report averages and variation, and show where PEGC does not win.
+## 🔭 Future possibilities
 
-**Hypothesis, stated before testing.** PEGC reduces ambulance travel time compared with fixed-time control, keeps most of basic priority's ambulance gain, and holds ordinary-vehicle delay well below basic priority's. The exact threshold is set after pilot runs, and the outcome is reported whether or not it is met.
+The Step 10 implementation is the **completed hackathon prototype**. Possible extensions, **not current features**, include:
 
-## 11. Results
+- **Live GPS integration** to update ambulance position and arrival estimates using actual vehicle movement.
+- **Traffic-aware route recommendations** and safe mid-journey rerouting based on real congestion.
+- **CCTV, road sensors and municipal traffic feeds** for measured traffic conditions.
+- **Trained ML-based ETA prediction**, evaluated against the current rule-based baseline on held-out scenarios.
+- **Offline run replays and wider backend deployment** for easier demonstrations without a running Codespace.
+- **Real traffic-controller integration**, only after extensive security, safety, legal and field validation.
 
-Scenario: TBD. Source: TBD.
+---
 
-| Metric | A Fixed-time | B Basic priority | C PEGC |
-|---|---|---|---|
-| Ambulance travel time (s) | TBD | TBD | TBD |
-| Ambulance stops | TBD | TBD | TBD |
-| Average wait, other vehicles (s) | TBD | TBD | TBD |
-| Longest single wait (s) | TBD | TBD | TBD |
-| Maximum queue (vehicles) | TBD | TBD | TBD |
-| Throughput (veh/h) | TBD | TBD | TBD |
-| Recovery time (s) | TBD | TBD | TBD |
-| Safety violations | TBD | TBD | TBD |
+## ⚠️ Scope and responsible use
 
-- **Predictor result:** TBD.
-- **Ablation result:** TBD.
-- **Trade-off curve:** TBD.
-- **Summary of findings:** TBD, to be written from the measured numbers, including any metric where PEGC does not win.
+PEGC is an **educational/research traffic simulation prototype**, not a deployed emergency-response system. Its signal timing rules, ETA calculations and experiment results are simulation-specific. The platform does not track actual ambulances, control public roads, or guarantee faster real-world response times. It is designed to help people **test assumptions, observe trade-offs and compare traffic-control policies with evidence**.
 
-## 12. Stress testing
+---
 
-The dashboard lets a user raise traffic density, block a road on the ambulance's route, or both, then rerun all strategies. The system recomputes the route, reports how decisions and metrics changed, and states plainly if no route exists.
+<div align="center">
 
-## 13. Future work
+### Built by **Nexora Titans** 🚑
 
-- Several emergency vehicles with competing routes
-- A real road layout imported from OpenStreetMap, calibrated against observed traffic counts
-- A stronger predictor and simulation look-ahead for decisions
-- Reinforcement learning as an additional strategy compared against A, B and C
-- Sensitivity analysis on how drivers yield to sirens
-- Exportable experiment reports
+**Predictive priority. Measurable outcomes. Safer simulation.**
 
-## 14. Licence and acknowledgements
+*Katathon 6.0 · Problem Statement 102*
 
-Licence: see the `LICENSE` file.
-
-Built with [SUMO](https://eclipse.dev/sumo/), React, FastAPI and scikit-learn.
+</div>
